@@ -1,0 +1,32 @@
+body {
+  font-family: system-ui, sans-serif;
+  margin: 0;
+  padding: 1rem;
+  background: #1a1a1a;
+  color: #eee;
+}
+
+#app {
+  max-width: 480px;
+  margin: 0 auto;
+}
+
+input, select, button {
+  font-size: 1rem;
+  padding: 0.4rem;
+  margin: 0.2rem 0;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.contract-card {
+  border: 1px solid #444;
+  border-radius: 8px;
+  padding: 0.75rem;
+  margin: 0.5rem 0;
+}
+
+.actions button {
+  width: auto;
+  margin-right: 0.5rem;
+}
