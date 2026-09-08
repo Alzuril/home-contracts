@@ -60,11 +60,20 @@ body {
   letter-spacing: 0.06em; color: var(--text-muted); margin: 1.5rem 0 0.6rem;
 }
 
-#app input, #app select {
+#app input, #app select, .modal-card input, .modal-card select, .modal-card textarea {
   font-family: var(--font-body); font-size: 0.95rem; padding: 0.6rem 0.7rem; margin: 0.25rem 0; width: 100%;
   background: var(--surface); border: 1px solid var(--border); border-radius: 9px; color: var(--text);
+  box-sizing: border-box; display: block;
 }
-#app input::placeholder { color: var(--text-muted); }
+#app input::placeholder, .modal-card input::placeholder, .modal-card textarea::placeholder { color: var(--text-muted); }
+.modal-card textarea { resize: vertical; min-height: 3.6rem; font-family: var(--font-body); }
+
+.title-input { min-height: 3.1rem; font-size: 1.05rem; }
+
+.field-label {
+  display: block; font-size: 0.78rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em;
+  color: var(--text-muted); margin: 0.9rem 0 0.2rem;
+}
 
 .btn-primary {
   font-family: var(--font-body); font-size: 0.95rem; font-weight: 700; padding: 0.65rem 0.8rem; margin: 0.25rem 0;
@@ -72,7 +81,8 @@ body {
 }
 .btn-primary:hover { background: var(--accent-hover); }
 
-#app input:focus-visible, #app select:focus-visible, button:focus-visible {
+#app input:focus-visible, #app select:focus-visible, button:focus-visible,
+.modal-card input:focus-visible, .modal-card select:focus-visible, .modal-card textarea:focus-visible {
   outline: 2px solid var(--accent); outline-offset: 1px;
 }
 
@@ -133,6 +143,7 @@ body {
   padding: 0.9rem 1rem; margin: 0.6rem 0;
 }
 .contract-card strong { font-size: 1rem; }
+.card-description { font-size: 0.85rem; color: var(--text-muted); margin: 0.35rem 0 0; line-height: 1.4; }
 
 .points-chip {
   display: inline-flex; align-items: center; gap: 0.25rem; background: var(--accent-soft); color: var(--accent-hover);

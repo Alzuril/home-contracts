@@ -23,7 +23,11 @@ STATUS_LABELS = {
 
 
 def avatar_color(profile_id):
-    return AVATAR_COLORS[hash(profile_id) % len(AVATAR_COLORS)]
+    # Python's built-in hash() is randomized per process (Pyodide restarts
+    # on every page load), so it must not be used here - it would give a
+    # different color each time. sum-of-codepoints is deterministic.
+    digest = sum(ord(ch) for ch in profile_id)
+    return AVATAR_COLORS[digest % len(AVATAR_COLORS)]
 
 
 def avatar_html(name, profile_id, small=False):
@@ -40,6 +44,23 @@ def rating_chip_html(c):
     if not c.get("rating"):
         return ""
     return f'<div><span class="points-chip">{stars_html(c["rating"])}</span></div>'
+
+
+def format_date(value):
+    if not value:
+        return None
+    try:
+        y, m, d = value[:10].split("-")
+        return f"{d}.{m}.{y}"
+    except Exception:
+        return value
+
+
+def dates_meta_html(c):
+    parts = [f"Створено {format_date(c['created_at'])}"]
+    if c.get("due_date"):
+        parts.append(f"Дедлайн {format_date(c['due_date'])}")
+    return f'<span class="card-meta">{" · ".join(parts)}</span>'
 
 
 async def refresh_profiles_cache():
@@ -148,9 +169,10 @@ async def on_login_click(event):
 
 
 async def do_logout(event=None):
-    global current_profile, current_pin
+    global current_profile, current_pin, _current_screen
     current_profile = None
     current_pin = None
+    _current_screen = None
     clear_session()
     document.getElementById("modal-root").innerHTML = ""
     await render_login()
@@ -204,6 +226,48 @@ async def try_auto_login(event=None):
     await enable_push()
 
 
+# ---- in-app back navigation (History API) ----
+
+_current_screen = None
+_suppress_history_push = False
+
+
+def push_screen(name):
+    global _current_screen
+    if _suppress_history_push or _current_screen == name:
+        _current_screen = name
+        return
+    _current_screen = name
+    try:
+        js.history.pushState(to_js({"screen": name}, dict_converter=js.Object.fromEntries), "", "")
+    except Exception:
+        pass
+
+
+async def on_popstate(event):
+    global _suppress_history_push, _current_screen
+    state = event.state
+    screen = None
+    if state:
+        try:
+            screen = state.to_py().get("screen")
+        except Exception:
+            screen = None
+    renderer = {"board": render_board, "menu": render_menu, "profile": render_profile,
+                "history": render_history, "tasks": render_tasks}.get(screen)
+    if not renderer or current_profile is None:
+        return
+    _current_screen = screen
+    _suppress_history_push = True
+    try:
+        await renderer()
+    finally:
+        _suppress_history_push = False
+
+
+js.window.addEventListener("popstate", create_proxy(on_popstate))
+
+
 # ---- shared shell ----
 
 def topbar_html(title):
@@ -229,29 +293,33 @@ def contract_card_html(c):
         buttons = f'<button class="accept-btn" data-id="{c["id"]}">Прийняти</button>'
     elif c["status"] == "accepted" and is_assignee:
         buttons = (
-            f'<button class="complete-btn" data-id="{c["id"]}">Завершив</button>'
+            f'<button class="complete-btn" data-id="{c["id"]}">Завершити</button>'
             f'<button class="decline-btn secondary" data-id="{c["id"]}">Відмовитись</button>'
         )
     elif c["status"] == "done_pending_confirm" and is_author:
         buttons = f'<button class="confirm-btn" data-id="{c["id"]}">Підтвердити</button>'
     counterpart_id = c["assignee_id"] if is_author else c["author_id"]
-    counterpart_label = "виконує" if is_author else "від"
+    counterpart_label = "Виконавець:" if is_author else "від"
     counterpart = (
         f'<span class="card-meta">{avatar_html(name_of(counterpart_id), counterpart_id, small=True)} {counterpart_label} {name_of(counterpart_id)}</span>'
         if counterpart_id else ""
     )
+    description = f'<p class="card-description">{c["description"]}</p>' if c.get("description") else ""
     return f"""
       <div class="contract-card" data-id="{c['id']}">
         <strong>{c['title']}</strong>
+        {description}
         {rating_chip_html(c)}
         <div class="status-pill status-{c['status']}">{STATUS_LABELS[c['status']]}</div>
         {counterpart}
+        {dates_meta_html(c)}
         <div class="actions">{buttons}</div>
       </div>
     """
 
 
 async def render_board(event=None):
+    push_screen("board")
     app = document.getElementById("app")
     contracts = await client.select(
         "contracts",
@@ -316,8 +384,11 @@ def open_create_modal():
       <div class="modal-overlay" id="modal-overlay">
         <div class="modal-card">
           <h2>Новий контракт</h2>
-          <input id="new-title" placeholder="Назва" autocomplete="off" />
-          <button id="submit-contract-btn" class="btn-primary">Кинути контракт</button>
+          <input id="new-title" class="title-input" placeholder="Введіть контракт..." autocomplete="off" />
+          <textarea id="new-description" placeholder="Опис (необов'язково)" rows="3"></textarea>
+          <label class="field-label" for="new-due-date">Дедлайн (необов'язково)</label>
+          <input id="new-due-date" type="date" />
+          <button id="submit-contract-btn" class="btn-primary">Додати контракт</button>
           <p id="create-error" class="field-error"></p>
           <button id="cancel-modal-btn" class="link-btn">Скасувати</button>
         </div>
@@ -329,6 +400,8 @@ def open_create_modal():
 
 async def on_create_click(event):
     title = document.getElementById("new-title").value
+    description = document.getElementById("new-description").value.strip()
+    due_date = document.getElementById("new-due-date").value or None
     error_el = document.getElementById("create-error")
     error_el.innerText = ""
     if not title.strip():
@@ -339,7 +412,8 @@ async def on_create_click(event):
             "p_author_id": current_profile["id"],
             "p_pin": current_pin,
             "p_title": title,
-            "p_description": "",
+            "p_description": description,
+            "p_due_date": due_date,
         })
     except SupabaseError as exc:
         error_el.innerText = f"Помилка: {exc.body}"
@@ -418,6 +492,7 @@ async def on_submit_rating(event):
 # ---- menu ----
 
 async def render_menu(event=None):
+    push_screen("menu")
     app = document.getElementById("app")
     document.getElementById("modal-root").innerHTML = ""
     app.innerHTML = f"""
@@ -454,6 +529,7 @@ async def render_menu(event=None):
 # ---- profile ----
 
 async def render_profile(event=None):
+    push_screen("profile")
     app = document.getElementById("app")
     contracts = await client.select("contracts")
     mine = current_profile["id"]
@@ -480,6 +556,7 @@ async def render_profile(event=None):
 # ---- history ----
 
 async def render_history(event=None):
+    push_screen("history")
     app = document.getElementById("app")
     contracts = await client.select("contracts")
     mine = current_profile["id"]
@@ -488,8 +565,10 @@ async def render_history(event=None):
     rows = "".join(f"""
       <div class="contract-card">
         <strong>{c['title']}</strong>
+        {f'<p class="card-description">{c["description"]}</p>' if c.get("description") else ""}
         {rating_chip_html(c)}
         <span class="card-meta">{avatar_html(name_of(c['assignee_id']), c['assignee_id'], small=True)} виконав(ла) {name_of(c['assignee_id'])}</span>
+        {dates_meta_html(c)}
       </div>
     """ for c in done)
     app.innerHTML = f"""
@@ -503,6 +582,7 @@ async def render_history(event=None):
 
 async def render_tasks(event=None):
     global active_tasks_tab
+    push_screen("tasks")
     app = document.getElementById("app")
     contracts = await client.select("contracts")
     mine = current_profile["id"]
@@ -512,7 +592,7 @@ async def render_tasks(event=None):
 
     def row(c):
         other_id = c["assignee_id"] if active_tasks_tab == "given" else c["author_id"]
-        other_label = "виконує" if active_tasks_tab == "given" else "від"
+        other_label = "Виконавець:" if active_tasks_tab == "given" else "від"
         other = (
             f'<span class="card-meta">{avatar_html(name_of(other_id), other_id, small=True)} {other_label} {name_of(other_id)}</span>'
             if other_id else '<span class="card-meta">ще ніхто не взяв</span>'
@@ -520,9 +600,11 @@ async def render_tasks(event=None):
         return f"""
           <div class="contract-card">
             <strong>{c['title']}</strong>
+            {f'<p class="card-description">{c["description"]}</p>' if c.get("description") else ""}
             {rating_chip_html(c)}
             <div class="status-pill status-{c['status']}">{STATUS_LABELS[c['status']]}</div>
             {other}
+            {dates_meta_html(c)}
           </div>
         """
 
