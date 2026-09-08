@@ -5,3 +5,4 @@ __pycache__/
 supabase/.branches
 supabase/.temp
 .vapid-keys-DO-NOT-COMMIT/
+config.py
