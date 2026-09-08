@@ -1,7 +1,8 @@
 {
   "name": "Домашні контракти",
   "short_name": "Контракти",
-  "start_url": "/",
+  "start_url": ".",
+  "scope": ".",
   "display": "standalone",
   "background_color": "#f6f5f2",
   "theme_color": "#e15a2e",

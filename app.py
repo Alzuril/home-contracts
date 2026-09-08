@@ -494,7 +494,7 @@ async def render_tasks(event=None):
 async def enable_push():
     if not hasattr(js.navigator, "serviceWorker"):
         return
-    registration = await js.navigator.serviceWorker.register("/sw.js")
+    registration = await js.navigator.serviceWorker.register("./sw.js")
     permission = await js.Notification.requestPermission()
     if permission != "granted":
         return
