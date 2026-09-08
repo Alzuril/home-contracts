@@ -31,6 +31,16 @@ def avatar_html(name, profile_id, small=False):
     return f'<div class="{cls}" style="background:{avatar_color(profile_id)}">{initial}</div>'
 
 
+def stars_html(rating):
+    return "".join("★" if i <= rating else "☆" for i in range(1, 6))
+
+
+def rating_chip_html(c):
+    if not c.get("rating"):
+        return ""
+    return f'<div><span class="points-chip">{stars_html(c["rating"])}</span></div>'
+
+
 async def refresh_profiles_cache():
     global profiles_cache
     rows = await client.select("public_profiles", "?select=id,name,points,level")
@@ -174,7 +184,7 @@ def contract_card_html(c):
     return f"""
       <div class="contract-card" data-id="{c['id']}">
         <strong>{c['title']}</strong>
-        <div><span class="points-chip">★ {c['points']}</span></div>
+        {rating_chip_html(c)}
         <div class="status-pill status-{c['status']}">{STATUS_LABELS[c['status']]}</div>
         {counterpart}
         <div class="actions">{buttons}</div>
@@ -210,9 +220,12 @@ async def on_board_click(event):
     if not contract_id:
         return
     classes = target.classList
+    if classes.contains("confirm-btn"):
+        open_confirm_modal(contract_id)
+        return
     action_map = {
         "accept-btn": "accept_contract", "decline-btn": "decline_contract",
-        "complete-btn": "complete_contract", "confirm-btn": "confirm_contract",
+        "complete-btn": "complete_contract",
     }
     fn_name = next((v for k, v in action_map.items() if classes.contains(k)), None)
     if not fn_name:
@@ -245,7 +258,6 @@ def open_create_modal():
         <div class="modal-card">
           <h2>Новий контракт</h2>
           <input id="new-title" placeholder="Назва" autocomplete="off" />
-          <input id="new-points" type="number" min="1" value="10" placeholder="Бали" />
           <button id="submit-contract-btn" class="btn-primary">Кинути контракт</button>
           <p id="create-error" class="field-error"></p>
           <button id="cancel-modal-btn" class="link-btn">Скасувати</button>
@@ -258,7 +270,6 @@ def open_create_modal():
 
 async def on_create_click(event):
     title = document.getElementById("new-title").value
-    points = document.getElementById("new-points").value
     error_el = document.getElementById("create-error")
     error_el.innerText = ""
     if not title.strip():
@@ -270,11 +281,78 @@ async def on_create_click(event):
             "p_pin": current_pin,
             "p_title": title,
             "p_description": "",
-            "p_points": int(points),
         })
     except SupabaseError as exc:
         error_el.innerText = f"Помилка: {exc.body}"
         return
+    await render_board()
+
+
+# ---- confirm-with-rating modal ----
+
+confirm_target_id = None
+selected_rating = 0
+
+
+def render_star_picker():
+    return "".join(
+        f'<button type="button" class="star-btn{" filled" if i <= selected_rating else ""}" data-value="{i}">★</button>'
+        for i in range(1, 6)
+    )
+
+
+def open_confirm_modal(contract_id):
+    global confirm_target_id, selected_rating
+    confirm_target_id = contract_id
+    selected_rating = 0
+    render_confirm_modal()
+
+
+def render_confirm_modal():
+    root = document.getElementById("modal-root")
+    disabled = "disabled" if selected_rating == 0 else ""
+    root.innerHTML = f"""
+      <div class="modal-overlay" id="modal-overlay">
+        <div class="modal-card">
+          <h2>Оціни виконання</h2>
+          <div class="star-picker" id="star-picker">{render_star_picker()}</div>
+          <button id="submit-rating-btn" class="btn-primary" {disabled}>Підтвердити</button>
+          <p id="rating-error" class="field-error"></p>
+          <button id="cancel-rating-btn" class="link-btn">Скасувати</button>
+        </div>
+      </div>
+    """
+    document.getElementById("star-picker").addEventListener("click", create_proxy(on_star_click))
+    document.getElementById("submit-rating-btn").addEventListener("click", create_proxy(on_submit_rating))
+    document.getElementById("cancel-rating-btn").addEventListener("click", create_proxy(lambda e: show_fab()))
+
+
+def on_star_click(event):
+    global selected_rating
+    value = event.target.getAttribute("data-value")
+    if not value:
+        return
+    selected_rating = int(value)
+    render_confirm_modal()
+
+
+async def on_submit_rating(event):
+    error_el = document.getElementById("rating-error")
+    error_el.innerText = ""
+    if selected_rating == 0:
+        error_el.innerText = "Постав оцінку"
+        return
+    try:
+        await client.rpc("confirm_contract", {
+            "p_contract_id": confirm_target_id,
+            "p_profile_id": current_profile["id"],
+            "p_pin": current_pin,
+            "p_rating": selected_rating,
+        })
+    except SupabaseError as exc:
+        error_el.innerText = f"Помилка: {exc.body}"
+        return
+    await refresh_current_profile()
     await render_board()
 
 
@@ -295,7 +373,7 @@ async def render_menu(event=None):
       </button>
       <button class="menu-row" id="nav-tasks">
         <span class="menu-icon" style="background:var(--green-soft);color:var(--green)">🔁</span>
-        Хто кому що винен <span class="chev">›</span>
+        Усі контракти <span class="chev">›</span>
       </button>
       <button class="menu-row" id="nav-history">
         <span class="menu-icon" style="background:var(--amber-soft);color:var(--amber)">📜</span>
@@ -351,7 +429,7 @@ async def render_history(event=None):
     rows = "".join(f"""
       <div class="contract-card">
         <strong>{c['title']}</strong>
-        <div><span class="points-chip">★ {c['points']}</span></div>
+        {rating_chip_html(c)}
         <span class="card-meta">{avatar_html(name_of(c['assignee_id']), c['assignee_id'], small=True)} виконав(ла) {name_of(c['assignee_id'])}</span>
       </div>
     """ for c in done)
@@ -383,7 +461,7 @@ async def render_tasks(event=None):
         return f"""
           <div class="contract-card">
             <strong>{c['title']}</strong>
-            <div><span class="points-chip">★ {c['points']}</span></div>
+            {rating_chip_html(c)}
             <div class="status-pill status-{c['status']}">{STATUS_LABELS[c['status']]}</div>
             {other}
           </div>
@@ -391,7 +469,7 @@ async def render_tasks(event=None):
 
     rows = "".join(row(c) for c in active_list) or '<p class="empty-note">Тут поки порожньо.</p>'
     app.innerHTML = f"""
-      {topbar_html("Хто кому що винен")}
+      {topbar_html("Усі контракти")}
       <div class="tabs">
         <button class="tab-btn {'active' if active_tasks_tab == 'given' else ''}" id="tab-given">Я дав</button>
         <button class="tab-btn {'active' if active_tasks_tab == 'received' else ''}" id="tab-received">Мені дали</button>

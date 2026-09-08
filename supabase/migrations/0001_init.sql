@@ -13,7 +13,7 @@ create table contracts (
   id uuid primary key default gen_random_uuid(),
   title text not null,
   description text not null default '',
-  points integer not null check (points > 0),
+  rating integer check (rating between 1 and 5),
   author_id uuid not null references profiles(id),
   assignee_id uuid references profiles(id),
   status text not null default 'open'
@@ -88,7 +88,7 @@ $$;
 
 create or replace function create_contract(
   p_author_id uuid, p_pin text, p_title text, p_description text,
-  p_points int, p_assignee_id uuid default null
+  p_assignee_id uuid default null
 ) returns contracts
 language plpgsql security definer set search_path = public as $$
 declare
@@ -97,8 +97,8 @@ begin
   if not verify_pin(p_author_id, p_pin) then
     raise exception 'invalid pin';
   end if;
-  insert into contracts (title, description, points, author_id, assignee_id, status)
-  values (p_title, coalesce(p_description, ''), p_points, p_author_id, p_assignee_id,
+  insert into contracts (title, description, author_id, assignee_id, status)
+  values (p_title, coalesce(p_description, ''), p_author_id, p_assignee_id,
           case when p_assignee_id is null then 'open' else 'accepted' end)
   returning * into v_contract;
   return v_contract;
@@ -142,22 +142,24 @@ begin
   return v_contract;
 end; $$;
 
-create or replace function confirm_contract(p_contract_id uuid, p_profile_id uuid, p_pin text)
-returns contracts language plpgsql security definer set search_path = public as $$
+create or replace function confirm_contract(
+  p_contract_id uuid, p_profile_id uuid, p_pin text, p_rating int
+) returns contracts language plpgsql security definer set search_path = public as $$
 declare v_contract contracts;
 begin
   if not verify_pin(p_profile_id, p_pin) then raise exception 'invalid pin'; end if;
-  update contracts set status = 'confirmed', updated_at = now()
+  if p_rating not between 1 and 5 then raise exception 'rating must be between 1 and 5'; end if;
+  update contracts set status = 'confirmed', rating = p_rating, updated_at = now()
     where id = p_contract_id and author_id = p_profile_id and status = 'done_pending_confirm'
     returning * into v_contract;
   if v_contract.id is null then raise exception 'contract not confirmable by this profile'; end if;
-  update profiles set points = points + v_contract.points where id = v_contract.assignee_id;
+  update profiles set points = points + p_rating where id = v_contract.assignee_id;
   return v_contract;
 end; $$;
 
 grant execute on function verify_pin(uuid, text) to anon, authenticated;
-grant execute on function create_contract(uuid, text, text, text, int, uuid) to anon, authenticated;
+grant execute on function create_contract(uuid, text, text, text, uuid) to anon, authenticated;
 grant execute on function accept_contract(uuid, uuid, text) to anon, authenticated;
 grant execute on function decline_contract(uuid, uuid, text) to anon, authenticated;
 grant execute on function complete_contract(uuid, uuid, text) to anon, authenticated;
-grant execute on function confirm_contract(uuid, uuid, text) to anon, authenticated;
+grant execute on function confirm_contract(uuid, uuid, text, int) to anon, authenticated;
