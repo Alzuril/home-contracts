@@ -54,7 +54,7 @@ create policy "contracts readable by anyone" on contracts for select using (true
 
 create or replace function create_profile(p_name text, p_pin text)
 returns public_profiles
-language plpgsql security definer set search_path = public as $$
+language plpgsql security definer set search_path = public as $create_profile$
 declare v_id uuid;
 begin
   if length(trim(p_name)) = 0 then
@@ -70,7 +70,7 @@ begin
     raise exception 'name already taken';
   end;
   return (select pp from public_profiles pp where pp.id = v_id);
-end; $$;
+end; $create_profile$;
 
 grant execute on function create_profile(text, text) to anon, authenticated;
 
@@ -79,18 +79,18 @@ returns boolean
 language sql
 security definer
 set search_path = public
-as $$
+as $verify_pin$
   select exists (
     select 1 from profiles
     where id = p_profile_id and pin_hash = crypt(p_pin, pin_hash)
   );
-$$;
+$verify_pin$;
 
 create or replace function create_contract(
   p_author_id uuid, p_pin text, p_title text, p_description text,
   p_assignee_id uuid default null
 ) returns contracts
-language plpgsql security definer set search_path = public as $$
+language plpgsql security definer set search_path = public as $create_contract$
 declare
   v_contract contracts;
 begin
@@ -103,10 +103,10 @@ begin
   returning * into v_contract;
   return v_contract;
 end;
-$$;
+$create_contract$;
 
 create or replace function accept_contract(p_contract_id uuid, p_profile_id uuid, p_pin text)
-returns contracts language plpgsql security definer set search_path = public as $$
+returns contracts language plpgsql security definer set search_path = public as $accept_contract$
 declare v_contract contracts;
 begin
   if not verify_pin(p_profile_id, p_pin) then raise exception 'invalid pin'; end if;
@@ -115,10 +115,10 @@ begin
     returning * into v_contract;
   if v_contract.id is null then raise exception 'contract not available'; end if;
   return v_contract;
-end; $$;
+end; $accept_contract$;
 
 create or replace function decline_contract(p_contract_id uuid, p_profile_id uuid, p_pin text)
-returns contracts language plpgsql security definer set search_path = public as $$
+returns contracts language plpgsql security definer set search_path = public as $decline_contract$
 declare v_contract contracts;
 begin
   if not verify_pin(p_profile_id, p_pin) then raise exception 'invalid pin'; end if;
@@ -128,10 +128,10 @@ begin
     returning * into v_contract;
   if v_contract.id is null then raise exception 'contract not declinable by this profile'; end if;
   return v_contract;
-end; $$;
+end; $decline_contract$;
 
 create or replace function complete_contract(p_contract_id uuid, p_profile_id uuid, p_pin text)
-returns contracts language plpgsql security definer set search_path = public as $$
+returns contracts language plpgsql security definer set search_path = public as $complete_contract$
 declare v_contract contracts;
 begin
   if not verify_pin(p_profile_id, p_pin) then raise exception 'invalid pin'; end if;
@@ -140,11 +140,11 @@ begin
     returning * into v_contract;
   if v_contract.id is null then raise exception 'contract not completable by this profile'; end if;
   return v_contract;
-end; $$;
+end; $complete_contract$;
 
 create or replace function confirm_contract(
   p_contract_id uuid, p_profile_id uuid, p_pin text, p_rating int
-) returns contracts language plpgsql security definer set search_path = public as $$
+) returns contracts language plpgsql security definer set search_path = public as $confirm_contract$
 declare v_contract contracts;
 begin
   if not verify_pin(p_profile_id, p_pin) then raise exception 'invalid pin'; end if;
@@ -155,7 +155,7 @@ begin
   if v_contract.id is null then raise exception 'contract not confirmable by this profile'; end if;
   update profiles set points = points + p_rating where id = v_contract.assignee_id;
   return v_contract;
-end; $$;
+end; $confirm_contract$;
 
 grant execute on function verify_pin(uuid, text) to anon, authenticated;
 grant execute on function create_contract(uuid, text, text, text, uuid) to anon, authenticated;
