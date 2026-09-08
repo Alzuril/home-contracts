@@ -4,3 +4,4 @@ __pycache__/
 .env
 supabase/.branches
 supabase/.temp
+.vapid-keys-DO-NOT-COMMIT/
