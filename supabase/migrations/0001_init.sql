@@ -54,7 +54,7 @@ create policy "contracts readable by anyone" on contracts for select using (true
 
 create or replace function create_profile(p_name text, p_pin text)
 returns public_profiles
-language plpgsql security definer set search_path = public as $create_profile$
+language plpgsql security definer set search_path = public, extensions as $create_profile$
 declare v_id uuid;
 begin
   if length(trim(p_name)) = 0 then
@@ -78,7 +78,7 @@ create or replace function verify_pin(p_profile_id uuid, p_pin text)
 returns boolean
 language sql
 security definer
-set search_path = public
+set search_path = public, extensions
 as $verify_pin$
   select exists (
     select 1 from profiles
@@ -90,7 +90,7 @@ create or replace function create_contract(
   p_author_id uuid, p_pin text, p_title text, p_description text,
   p_assignee_id uuid default null
 ) returns contracts
-language plpgsql security definer set search_path = public as $create_contract$
+language plpgsql security definer set search_path = public, extensions as $create_contract$
 declare
   v_contract contracts;
 begin
@@ -106,7 +106,7 @@ end;
 $create_contract$;
 
 create or replace function accept_contract(p_contract_id uuid, p_profile_id uuid, p_pin text)
-returns contracts language plpgsql security definer set search_path = public as $accept_contract$
+returns contracts language plpgsql security definer set search_path = public, extensions as $accept_contract$
 declare v_contract contracts;
 begin
   if not verify_pin(p_profile_id, p_pin) then raise exception 'invalid pin'; end if;
@@ -118,7 +118,7 @@ begin
 end; $accept_contract$;
 
 create or replace function decline_contract(p_contract_id uuid, p_profile_id uuid, p_pin text)
-returns contracts language plpgsql security definer set search_path = public as $decline_contract$
+returns contracts language plpgsql security definer set search_path = public, extensions as $decline_contract$
 declare v_contract contracts;
 begin
   if not verify_pin(p_profile_id, p_pin) then raise exception 'invalid pin'; end if;
@@ -131,7 +131,7 @@ begin
 end; $decline_contract$;
 
 create or replace function complete_contract(p_contract_id uuid, p_profile_id uuid, p_pin text)
-returns contracts language plpgsql security definer set search_path = public as $complete_contract$
+returns contracts language plpgsql security definer set search_path = public, extensions as $complete_contract$
 declare v_contract contracts;
 begin
   if not verify_pin(p_profile_id, p_pin) then raise exception 'invalid pin'; end if;
@@ -144,7 +144,7 @@ end; $complete_contract$;
 
 create or replace function confirm_contract(
   p_contract_id uuid, p_profile_id uuid, p_pin text, p_rating int
-) returns contracts language plpgsql security definer set search_path = public as $confirm_contract$
+) returns contracts language plpgsql security definer set search_path = public, extensions as $confirm_contract$
 declare v_contract contracts;
 begin
   if not verify_pin(p_profile_id, p_pin) then raise exception 'invalid pin'; end if;
