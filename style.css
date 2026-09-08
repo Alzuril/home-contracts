@@ -1,9 +1,26 @@
+:root {
+  --bg: #f7f7f5;
+  --surface: #ffffff;
+  --border: #e2e2df;
+  --text: #1c1c1a;
+  --text-muted: #6b6b66;
+  --accent: #0f6d52;
+  --accent-hover: #0b5741;
+  --danger: #b3261e;
+  --font-heading: 'Manrope', system-ui, -apple-system, sans-serif;
+  --font-body: 'Inter', system-ui, -apple-system, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
 body {
-  font-family: system-ui, sans-serif;
+  font-family: var(--font-body);
   margin: 0;
-  padding: 1rem;
-  background: #1a1a1a;
-  color: #eee;
+  padding: 1.5rem 1rem 3rem;
+  background: var(--bg);
+  color: var(--text);
 }
 
 #app {
@@ -11,22 +28,125 @@ body {
   margin: 0 auto;
 }
 
-input, select, button {
-  font-size: 1rem;
-  padding: 0.4rem;
-  margin: 0.2rem 0;
+h1 {
+  font-family: var(--font-heading);
+  font-size: 1.3rem;
+  font-weight: 700;
+  margin: 0 0 1.1rem;
+  text-wrap: balance;
+}
+
+h2 {
+  font-family: var(--font-heading);
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+  margin: 1.6rem 0 0.6rem;
+}
+
+input, select {
+  font-family: var(--font-body);
+  font-size: 0.95rem;
+  padding: 0.6rem 0.7rem;
+  margin: 0.25rem 0;
   width: 100%;
   box-sizing: border-box;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+}
+
+input::placeholder {
+  color: var(--text-muted);
+}
+
+button {
+  font-family: var(--font-body);
+  font-size: 0.95rem;
+  font-weight: 600;
+  padding: 0.6rem 0.7rem;
+  margin: 0.25rem 0;
+  width: 100%;
+  box-sizing: border-box;
+  border-radius: 8px;
+  border: 1px solid var(--accent);
+  background: var(--accent);
+  color: #fff;
+  cursor: pointer;
+}
+
+button:hover {
+  background: var(--accent-hover);
+  border-color: var(--accent-hover);
+}
+
+input:focus-visible, select:focus-visible, button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.link-btn {
+  background: transparent;
+  border: none;
+  color: var(--accent);
+  font-weight: 500;
+  padding: 0.4rem 0;
+  width: auto;
+}
+
+.link-btn:hover {
+  background: transparent;
+  color: var(--accent-hover);
+  text-decoration: underline;
+}
+
+.field-error {
+  color: var(--danger);
+  font-size: 0.85rem;
+  min-height: 1.1em;
+  margin: 0.3rem 0 0.6rem;
 }
 
 .contract-card {
-  border: 1px solid #444;
-  border-radius: 8px;
-  padding: 0.75rem;
-  margin: 0.5rem 0;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  border-radius: 10px;
+  padding: 0.9rem 1rem;
+  margin: 0.6rem 0;
+}
+
+.contract-card strong {
+  font-size: 1rem;
+}
+
+.status-pill {
+  display: inline-block;
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  padding: 0.15rem 0.5rem;
+  border-radius: 999px;
+  margin-top: 0.4rem;
+}
+
+.status-open { background: #ececeb; color: #56564f; }
+.status-accepted { background: #e4eef8; color: #1d5fa3; }
+.status-done_pending_confirm { background: #fbf0d9; color: #92660b; }
+.status-confirmed { background: #e2f2ea; color: var(--accent); }
+
+.actions {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.7rem;
 }
 
 .actions button {
   width: auto;
-  margin-right: 0.5rem;
+  margin: 0;
+  padding: 0.45rem 0.8rem;
+  font-size: 0.85rem;
 }

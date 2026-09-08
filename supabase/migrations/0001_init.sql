@@ -52,6 +52,28 @@ grant select on contracts to anon, authenticated;
 
 create policy "contracts readable by anyone" on contracts for select using (true);
 
+create or replace function create_profile(p_name text, p_pin text)
+returns public_profiles
+language plpgsql security definer set search_path = public as $$
+declare v_id uuid;
+begin
+  if length(trim(p_name)) = 0 then
+    raise exception 'name required';
+  end if;
+  if p_pin !~ '^[0-9]{4}$' then
+    raise exception 'pin must be exactly 4 digits';
+  end if;
+  begin
+    insert into profiles (name, pin_hash) values (trim(p_name), crypt(p_pin, gen_salt('bf')))
+    returning id into v_id;
+  exception when unique_violation then
+    raise exception 'name already taken';
+  end;
+  return (select pp from public_profiles pp where pp.id = v_id);
+end; $$;
+
+grant execute on function create_profile(text, text) to anon, authenticated;
+
 create or replace function verify_pin(p_profile_id uuid, p_pin text)
 returns boolean
 language sql

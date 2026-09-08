@@ -14,16 +14,58 @@ current_pin = None
 
 async def render_login():
     app = document.getElementById("app")
-    profiles = await client.select("public_profiles", "?select=id,name")
+    profiles = await client.select("public_profiles", "?select=id,name&order=name.asc")
+    if not profiles:
+        await render_signup()
+        return
     options = "".join(f'<option value="{p["id"]}">{p["name"]}</option>' for p in profiles)
     app.innerHTML = f"""
-      <h1>Хто ти?</h1>
+      <h1>Увійти</h1>
       <select id="profile-select">{options}</select>
       <input id="pin-input" type="password" inputmode="numeric" maxlength="4" placeholder="PIN" />
       <button id="login-btn">Увійти</button>
-      <p id="login-error" style="color:#f66"></p>
+      <p id="login-error" class="field-error"></p>
+      <button id="to-signup-btn" class="link-btn">Ще нема профілю? Зареєструватися</button>
     """
     document.getElementById("login-btn").addEventListener("click", create_proxy(on_login_click))
+    document.getElementById("to-signup-btn").addEventListener("click", create_proxy(lambda e: render_signup()))
+
+
+async def render_signup():
+    app = document.getElementById("app")
+    app.innerHTML = """
+      <h1>Створити профіль</h1>
+      <input id="signup-name" placeholder="Твоє ім'я" autocomplete="off" />
+      <input id="signup-pin" type="password" inputmode="numeric" maxlength="4" placeholder="Вигадай 4-значний PIN" />
+      <button id="signup-btn">Створити</button>
+      <p id="signup-error" class="field-error"></p>
+      <button id="to-login-btn" class="link-btn">Вже є профіль? Увійти</button>
+    """
+    document.getElementById("signup-btn").addEventListener("click", create_proxy(on_signup_click))
+    document.getElementById("to-login-btn").addEventListener("click", create_proxy(lambda e: render_login()))
+
+
+async def on_signup_click(event):
+    global current_profile, current_pin
+    name = document.getElementById("signup-name").value.strip()
+    pin = document.getElementById("signup-pin").value
+    error_el = document.getElementById("signup-error")
+    error_el.innerText = ""
+    if not name:
+        error_el.innerText = "Введи ім'я"
+        return
+    if not (len(pin) == 4 and pin.isdigit()):
+        error_el.innerText = "PIN має бути рівно 4 цифри"
+        return
+    try:
+        profile = await client.rpc("create_profile", {"p_name": name, "p_pin": pin})
+    except SupabaseError as exc:
+        error_el.innerText = f"Помилка: {exc.body}"
+        return
+    current_pin = pin
+    current_profile = profile
+    await render_board()
+    await enable_push()
 
 
 async def on_login_click(event):
@@ -60,10 +102,14 @@ def contract_card_html(c):
         )
     elif c["status"] == "done_pending_confirm" and is_author:
         buttons = f'<button class="confirm-btn" data-id="{c["id"]}">Підтвердити</button>'
+    status_label = {
+        "open": "відкрито", "accepted": "прийнято",
+        "done_pending_confirm": "чекає підтвердження", "confirmed": "підтверджено",
+    }[c["status"]]
     return f"""
       <div class="contract-card" data-id="{c['id']}">
         <strong>{c['title']}</strong> — {c['points']} балів
-        <div>Статус: {c['status']}</div>
+        <div class="status-pill status-{c['status']}">{status_label}</div>
         <div class="actions">{buttons}</div>
       </div>
     """
@@ -82,7 +128,7 @@ async def render_board():
       <input id="new-title" placeholder="Назва" />
       <input id="new-points" type="number" min="1" value="10" />
       <button id="create-btn">Кинути контракт</button>
-      <p id="create-error" style="color:#f66"></p>
+      <p id="create-error" class="field-error"></p>
       <h2>Дошка контрактів</h2>
       <div id="contracts-list">{cards or "<p>Порожньо</p>"}</div>
     """
