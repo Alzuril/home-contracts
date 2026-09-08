@@ -32,7 +32,7 @@ Deno.serve(async (req) => {
 
   const notificationPayload = JSON.stringify({
     title: "Новий контракт!",
-    body: `${contract.title} — ${contract.points} балів`,
+    body: contract.title,
   });
 
   for (const sub of subscriptions ?? []) {
