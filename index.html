@@ -13,7 +13,10 @@
   <script type="module" src="https://cdn.jsdelivr.net/npm/@pyscript/core@0.4.32/dist/core.js"></script>
 </head>
 <body>
-  <div id="app">Завантаження...</div>
+  <div class="app-frame">
+    <div id="app">Завантаження...</div>
+    <div id="modal-root"></div>
+  </div>
   <script type="py" src="app.py" config='{"files": {"config.py": "config.py", "supabase_client.py": "supabase_client.py"}}'></script>
 </body>
 </html>

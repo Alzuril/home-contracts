@@ -10,9 +10,46 @@ client = SupabaseClient(SUPABASE_URL, SUPABASE_ANON_KEY, pyodide_fetcher)
 
 current_profile = None
 current_pin = None
+profiles_cache = {}
+active_tasks_tab = "given"
+
+AVATAR_COLORS = ["var(--avatar-1)", "var(--avatar-2)", "var(--avatar-3)", "var(--avatar-4)", "var(--avatar-5)"]
+
+STATUS_LABELS = {
+    "open": "відкрито", "accepted": "прийнято",
+    "done_pending_confirm": "чекає підтвердження", "confirmed": "виконано",
+}
 
 
-async def render_login():
+def avatar_color(profile_id):
+    return AVATAR_COLORS[hash(profile_id) % len(AVATAR_COLORS)]
+
+
+def avatar_html(name, profile_id, small=False):
+    initial = (name or "?")[0].upper()
+    cls = "avatar small" if small else "avatar"
+    return f'<div class="{cls}" style="background:{avatar_color(profile_id)}">{initial}</div>'
+
+
+async def refresh_profiles_cache():
+    global profiles_cache
+    rows = await client.select("public_profiles", "?select=id,name,points,level")
+    profiles_cache = {p["id"]: p for p in rows}
+
+
+def name_of(profile_id):
+    return profiles_cache.get(profile_id, {}).get("name", "?")
+
+
+async def refresh_current_profile():
+    global current_profile
+    await refresh_profiles_cache()
+    current_profile = profiles_cache[current_profile["id"]]
+
+
+# ---- auth screens ----
+
+async def render_login(event=None):
     app = document.getElementById("app")
     profiles = await client.select("public_profiles", "?select=id,name&order=name.asc")
     if not profiles:
@@ -23,26 +60,26 @@ async def render_login():
       <h1>Увійти</h1>
       <select id="profile-select">{options}</select>
       <input id="pin-input" type="password" inputmode="numeric" maxlength="4" placeholder="PIN" />
-      <button id="login-btn">Увійти</button>
+      <button id="login-btn" class="btn-primary">Увійти</button>
       <p id="login-error" class="field-error"></p>
       <button id="to-signup-btn" class="link-btn">Ще нема профілю? Зареєструватися</button>
     """
     document.getElementById("login-btn").addEventListener("click", create_proxy(on_login_click))
-    document.getElementById("to-signup-btn").addEventListener("click", create_proxy(lambda e: render_signup()))
+    document.getElementById("to-signup-btn").addEventListener("click", create_proxy(render_signup))
 
 
-async def render_signup():
+async def render_signup(event=None):
     app = document.getElementById("app")
     app.innerHTML = """
       <h1>Створити профіль</h1>
       <input id="signup-name" placeholder="Твоє ім'я" autocomplete="off" />
       <input id="signup-pin" type="password" inputmode="numeric" maxlength="4" placeholder="Вигадай 4-значний PIN" />
-      <button id="signup-btn">Створити</button>
+      <button id="signup-btn" class="btn-primary">Створити</button>
       <p id="signup-error" class="field-error"></p>
       <button id="to-login-btn" class="link-btn">Вже є профіль? Увійти</button>
     """
     document.getElementById("signup-btn").addEventListener("click", create_proxy(on_signup_click))
-    document.getElementById("to-login-btn").addEventListener("click", create_proxy(lambda e: render_login()))
+    document.getElementById("to-login-btn").addEventListener("click", create_proxy(render_login))
 
 
 async def on_signup_click(event):
@@ -64,6 +101,7 @@ async def on_signup_click(event):
         return
     current_pin = pin
     current_profile = profile
+    await refresh_profiles_cache()
     await render_board()
     await enable_push()
 
@@ -83,11 +121,36 @@ async def on_login_click(event):
         error_el.innerText = "Невірний PIN"
         return
     current_pin = pin
-    profiles = await client.select("public_profiles", f"?id=eq.{profile_id}&select=id,name,points,level")
-    current_profile = profiles[0]
+    await refresh_profiles_cache()
+    current_profile = profiles_cache[profile_id]
     await render_board()
     await enable_push()
 
+
+async def do_logout(event=None):
+    global current_profile, current_pin
+    current_profile = None
+    current_pin = None
+    document.getElementById("modal-root").innerHTML = ""
+    await render_login()
+
+
+# ---- shared shell ----
+
+def topbar_html(title):
+    return f"""
+      <div class="topbar">
+        <button id="menu-btn" class="icon-btn" aria-label="Меню">☰</button>
+        <h1>{title}</h1>
+      </div>
+    """
+
+
+def wire_topbar():
+    document.getElementById("menu-btn").addEventListener("click", create_proxy(render_menu))
+
+
+# ---- board ----
 
 def contract_card_html(c):
     buttons = ""
@@ -98,24 +161,28 @@ def contract_card_html(c):
     elif c["status"] == "accepted" and is_assignee:
         buttons = (
             f'<button class="complete-btn" data-id="{c["id"]}">Завершив</button>'
-            f'<button class="decline-btn" data-id="{c["id"]}">Відмовитись</button>'
+            f'<button class="decline-btn secondary" data-id="{c["id"]}">Відмовитись</button>'
         )
     elif c["status"] == "done_pending_confirm" and is_author:
         buttons = f'<button class="confirm-btn" data-id="{c["id"]}">Підтвердити</button>'
-    status_label = {
-        "open": "відкрито", "accepted": "прийнято",
-        "done_pending_confirm": "чекає підтвердження", "confirmed": "підтверджено",
-    }[c["status"]]
+    counterpart_id = c["assignee_id"] if is_author else c["author_id"]
+    counterpart_label = "виконує" if is_author else "від"
+    counterpart = (
+        f'<span class="card-meta">{avatar_html(name_of(counterpart_id), counterpart_id, small=True)} {counterpart_label} {name_of(counterpart_id)}</span>'
+        if counterpart_id else ""
+    )
     return f"""
       <div class="contract-card" data-id="{c['id']}">
-        <strong>{c['title']}</strong> — {c['points']} балів
-        <div class="status-pill status-{c['status']}">{status_label}</div>
+        <strong>{c['title']}</strong>
+        <div><span class="points-chip">★ {c['points']}</span></div>
+        <div class="status-pill status-{c['status']}">{STATUS_LABELS[c['status']]}</div>
+        {counterpart}
         <div class="actions">{buttons}</div>
       </div>
     """
 
 
-async def render_board():
+async def render_board(event=None):
     app = document.getElementById("app")
     contracts = await client.select(
         "contracts",
@@ -123,17 +190,70 @@ async def render_board():
     )
     cards = "".join(contract_card_html(c) for c in contracts)
     app.innerHTML = f"""
-      <h1>Привіт, {current_profile['name']} (рівень {current_profile['level']}, {current_profile['points']} балів)</h1>
-      <h2>Новий контракт</h2>
-      <input id="new-title" placeholder="Назва" />
-      <input id="new-points" type="number" min="1" value="10" />
-      <button id="create-btn">Кинути контракт</button>
-      <p id="create-error" class="field-error"></p>
+      {topbar_html(f"Привіт, {current_profile['name']}")}
+      <div class="stat-row">
+        <div class="stat-tile"><div class="stat-value">{current_profile['points']}</div><div class="stat-label">Балів</div></div>
+        <div class="stat-tile"><div class="stat-value">{current_profile['level']}</div><div class="stat-label">Рівень</div></div>
+      </div>
       <h2>Дошка контрактів</h2>
-      <div id="contracts-list">{cards or "<p>Порожньо</p>"}</div>
+      <div id="contracts-list">{cards or '<p class="empty-note">Порожньо. Натисни + внизу, щоб кинути перший контракт.</p>'}</div>
     """
-    document.getElementById("create-btn").addEventListener("click", create_proxy(on_create_click))
+    wire_topbar()
     document.getElementById("contracts-list").addEventListener("click", create_proxy(on_board_click))
+    show_fab()
+
+
+async def on_board_click(event):
+    global current_profile
+    target = event.target
+    contract_id = target.getAttribute("data-id")
+    if not contract_id:
+        return
+    classes = target.classList
+    action_map = {
+        "accept-btn": "accept_contract", "decline-btn": "decline_contract",
+        "complete-btn": "complete_contract", "confirm-btn": "confirm_contract",
+    }
+    fn_name = next((v for k, v in action_map.items() if classes.contains(k)), None)
+    if not fn_name:
+        return
+    try:
+        await client.rpc(fn_name, {
+            "p_contract_id": contract_id, "p_profile_id": current_profile["id"], "p_pin": current_pin,
+        })
+    except SupabaseError as exc:
+        document.getElementById("app").querySelector("h1").insertAdjacentHTML(
+            "afterend", f'<p class="field-error">Помилка: {exc.body}</p>'
+        )
+        return
+    await refresh_current_profile()
+    await render_board()
+
+
+# ---- create-contract modal (FAB) ----
+
+def show_fab():
+    root = document.getElementById("modal-root")
+    root.innerHTML = '<button id="fab-btn" class="fab" aria-label="Кинути контракт">+</button>'
+    document.getElementById("fab-btn").addEventListener("click", create_proxy(lambda e: open_create_modal()))
+
+
+def open_create_modal():
+    root = document.getElementById("modal-root")
+    root.innerHTML = """
+      <div class="modal-overlay" id="modal-overlay">
+        <div class="modal-card">
+          <h2>Новий контракт</h2>
+          <input id="new-title" placeholder="Назва" autocomplete="off" />
+          <input id="new-points" type="number" min="1" value="10" placeholder="Бали" />
+          <button id="submit-contract-btn" class="btn-primary">Кинути контракт</button>
+          <p id="create-error" class="field-error"></p>
+          <button id="cancel-modal-btn" class="link-btn">Скасувати</button>
+        </div>
+      </div>
+    """
+    document.getElementById("submit-contract-btn").addEventListener("click", create_proxy(on_create_click))
+    document.getElementById("cancel-modal-btn").addEventListener("click", create_proxy(lambda e: show_fab()))
 
 
 async def on_create_click(event):
@@ -158,39 +278,140 @@ async def on_create_click(event):
     await render_board()
 
 
-async def on_board_click(event):
-    global current_profile
-    target = event.target
-    contract_id = target.getAttribute("data-id")
-    if not contract_id:
-        return
-    classes = target.classList
-    try:
-        if classes.contains("accept-btn"):
-            await client.rpc("accept_contract", {
-                "p_contract_id": contract_id, "p_profile_id": current_profile["id"], "p_pin": current_pin,
-            })
-        elif classes.contains("decline-btn"):
-            await client.rpc("decline_contract", {
-                "p_contract_id": contract_id, "p_profile_id": current_profile["id"], "p_pin": current_pin,
-            })
-        elif classes.contains("complete-btn"):
-            await client.rpc("complete_contract", {
-                "p_contract_id": contract_id, "p_profile_id": current_profile["id"], "p_pin": current_pin,
-            })
-        elif classes.contains("confirm-btn"):
-            await client.rpc("confirm_contract", {
-                "p_contract_id": contract_id, "p_profile_id": current_profile["id"], "p_pin": current_pin,
-            })
-        else:
-            return
-    except SupabaseError as exc:
-        document.getElementById("create-error").innerText = f"Помилка: {exc.body}"
-        return
-    profiles = await client.select("public_profiles", f"?id=eq.{current_profile['id']}&select=id,name,points,level")
-    current_profile = profiles[0]
-    await render_board()
+# ---- menu ----
 
+async def render_menu(event=None):
+    app = document.getElementById("app")
+    document.getElementById("modal-root").innerHTML = ""
+    app.innerHTML = f"""
+      {topbar_html("Меню")}
+      <button class="menu-row" id="nav-board">
+        <span class="menu-icon" style="background:var(--accent-soft);color:var(--accent)">📋</span>
+        Дошка контрактів <span class="chev">›</span>
+      </button>
+      <button class="menu-row" id="nav-profile">
+        <span class="menu-icon" style="background:var(--blue-soft);color:var(--blue)">👤</span>
+        Профіль <span class="chev">›</span>
+      </button>
+      <button class="menu-row" id="nav-tasks">
+        <span class="menu-icon" style="background:var(--green-soft);color:var(--green)">🔁</span>
+        Хто кому що винен <span class="chev">›</span>
+      </button>
+      <button class="menu-row" id="nav-history">
+        <span class="menu-icon" style="background:var(--amber-soft);color:var(--amber)">📜</span>
+        Історія виконаного <span class="chev">›</span>
+      </button>
+      <button class="menu-row logout" id="nav-logout">
+        <span class="menu-icon">↩</span>
+        Вийти <span class="chev">›</span>
+      </button>
+    """
+    wire_topbar()
+    document.getElementById("nav-board").addEventListener("click", create_proxy(render_board))
+    document.getElementById("nav-profile").addEventListener("click", create_proxy(render_profile))
+    document.getElementById("nav-tasks").addEventListener("click", create_proxy(render_tasks))
+    document.getElementById("nav-history").addEventListener("click", create_proxy(render_history))
+    document.getElementById("nav-logout").addEventListener("click", create_proxy(do_logout))
+
+
+# ---- profile ----
+
+async def render_profile(event=None):
+    app = document.getElementById("app")
+    contracts = await client.select("contracts")
+    mine = current_profile["id"]
+    completed_by_me = len([c for c in contracts if c["status"] == "confirmed" and c["assignee_id"] == mine])
+    given_by_me = len([c for c in contracts if c["author_id"] == mine])
+    app.innerHTML = f"""
+      {topbar_html("Профіль")}
+      <div class="profile-header">
+        {avatar_html(current_profile['name'], mine)}
+        <div>
+          <div class="profile-name">{current_profile['name']}</div>
+          <div class="profile-sub">Рівень {current_profile['level']}</div>
+        </div>
+      </div>
+      <div class="stat-row">
+        <div class="stat-tile"><div class="stat-value">{current_profile['points']}</div><div class="stat-label">Балів</div></div>
+        <div class="stat-tile"><div class="stat-value">{completed_by_me}</div><div class="stat-label">Виконано</div></div>
+        <div class="stat-tile"><div class="stat-value">{given_by_me}</div><div class="stat-label">Створено</div></div>
+      </div>
+    """
+    wire_topbar()
+
+
+# ---- history ----
+
+async def render_history(event=None):
+    app = document.getElementById("app")
+    contracts = await client.select("contracts")
+    mine = current_profile["id"]
+    done = [c for c in contracts if c["status"] == "confirmed" and mine in (c["author_id"], c["assignee_id"])]
+    done.sort(key=lambda c: c["created_at"], reverse=True)
+    rows = "".join(f"""
+      <div class="contract-card">
+        <strong>{c['title']}</strong>
+        <div><span class="points-chip">★ {c['points']}</span></div>
+        <span class="card-meta">{avatar_html(name_of(c['assignee_id']), c['assignee_id'], small=True)} виконав(ла) {name_of(c['assignee_id'])}</span>
+      </div>
+    """ for c in done)
+    app.innerHTML = f"""
+      {topbar_html("Історія виконаного")}
+      {rows or '<p class="empty-note">Ще нічого не підтверджено.</p>'}
+    """
+    wire_topbar()
+
+
+# ---- tasks (who owes whom) ----
+
+async def render_tasks(event=None):
+    global active_tasks_tab
+    app = document.getElementById("app")
+    contracts = await client.select("contracts")
+    mine = current_profile["id"]
+    given = sorted([c for c in contracts if c["author_id"] == mine], key=lambda c: c["created_at"], reverse=True)
+    received = sorted([c for c in contracts if c["author_id"] != mine], key=lambda c: c["created_at"], reverse=True)
+    active_list = given if active_tasks_tab == "given" else received
+
+    def row(c):
+        other_id = c["assignee_id"] if active_tasks_tab == "given" else c["author_id"]
+        other_label = "виконує" if active_tasks_tab == "given" else "від"
+        other = (
+            f'<span class="card-meta">{avatar_html(name_of(other_id), other_id, small=True)} {other_label} {name_of(other_id)}</span>'
+            if other_id else '<span class="card-meta">ще ніхто не взяв</span>'
+        )
+        return f"""
+          <div class="contract-card">
+            <strong>{c['title']}</strong>
+            <div><span class="points-chip">★ {c['points']}</span></div>
+            <div class="status-pill status-{c['status']}">{STATUS_LABELS[c['status']]}</div>
+            {other}
+          </div>
+        """
+
+    rows = "".join(row(c) for c in active_list) or '<p class="empty-note">Тут поки порожньо.</p>'
+    app.innerHTML = f"""
+      {topbar_html("Хто кому що винен")}
+      <div class="tabs">
+        <button class="tab-btn {'active' if active_tasks_tab == 'given' else ''}" id="tab-given">Я дав</button>
+        <button class="tab-btn {'active' if active_tasks_tab == 'received' else ''}" id="tab-received">Мені дали</button>
+      </div>
+      {rows}
+    """
+    wire_topbar()
+
+    def set_tab(tab):
+        async def handler(e):
+            global active_tasks_tab
+            active_tasks_tab = tab
+            await render_tasks()
+        return handler
+
+    document.getElementById("tab-given").addEventListener("click", create_proxy(set_tab("given")))
+    document.getElementById("tab-received").addEventListener("click", create_proxy(set_tab("received")))
+
+
+# ---- push ----
 
 async def enable_push():
     if not hasattr(js.navigator, "serviceWorker"):
