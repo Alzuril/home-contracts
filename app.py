@@ -1,4 +1,5 @@
 import asyncio
+from urllib.parse import quote
 
 import js
 from pyscript import document
@@ -61,14 +62,13 @@ async def refresh_current_profile():
 
 async def render_login(event=None):
     app = document.getElementById("app")
-    profiles = await client.select("public_profiles", "?select=id,name&order=name.asc")
-    if not profiles:
+    existing = await client.select("public_profiles", "?select=id&limit=1")
+    if not existing:
         await render_signup()
         return
-    options = "".join(f'<option value="{p["id"]}">{p["name"]}</option>' for p in profiles)
-    app.innerHTML = f"""
+    app.innerHTML = """
       <h1>Увійти</h1>
-      <select id="profile-select">{options}</select>
+      <input id="name-input" placeholder="Твоє ім'я" autocomplete="off" />
       <input id="pin-input" type="password" inputmode="numeric" maxlength="4" placeholder="PIN" />
       <button id="login-btn" class="btn-primary">Увійти</button>
       <p id="login-error" class="field-error"></p>
@@ -111,6 +111,7 @@ async def on_signup_click(event):
         return
     current_pin = pin
     current_profile = profile
+    save_session()
     await refresh_profiles_cache()
     await render_board()
     await enable_push()
@@ -118,12 +119,20 @@ async def on_signup_click(event):
 
 async def on_login_click(event):
     global current_profile, current_pin
-    profile_id = document.getElementById("profile-select").value
+    name = document.getElementById("name-input").value.strip()
     pin = document.getElementById("pin-input").value
     error_el = document.getElementById("login-error")
     error_el.innerText = ""
+    if not name:
+        error_el.innerText = "Введи ім'я"
+        return
+    matches = await client.select("public_profiles", f"?name=eq.{quote(name)}&select=id,name,points,level")
+    if not matches:
+        error_el.innerText = "Профіль з таким іменем не знайдено"
+        return
+    profile = matches[0]
     try:
-        ok = await client.rpc("verify_pin", {"p_profile_id": profile_id, "p_pin": pin})
+        ok = await client.rpc("verify_pin", {"p_profile_id": profile["id"], "p_pin": pin})
     except SupabaseError as exc:
         error_el.innerText = f"Помилка: {exc.body}"
         return
@@ -131,8 +140,9 @@ async def on_login_click(event):
         error_el.innerText = "Невірний PIN"
         return
     current_pin = pin
+    current_profile = profile
+    save_session()
     await refresh_profiles_cache()
-    current_profile = profiles_cache[profile_id]
     await render_board()
     await enable_push()
 
@@ -141,8 +151,57 @@ async def do_logout(event=None):
     global current_profile, current_pin
     current_profile = None
     current_pin = None
+    clear_session()
     document.getElementById("modal-root").innerHTML = ""
     await render_login()
+
+
+# ---- remembered session (localStorage) ----
+
+def save_session():
+    try:
+        js.localStorage.setItem("hc_profile_id", current_profile["id"])
+        js.localStorage.setItem("hc_pin", current_pin)
+    except Exception:
+        pass
+
+
+def clear_session():
+    try:
+        js.localStorage.removeItem("hc_profile_id")
+        js.localStorage.removeItem("hc_pin")
+    except Exception:
+        pass
+
+
+async def try_auto_login(event=None):
+    global current_profile, current_pin
+    try:
+        saved_id = js.localStorage.getItem("hc_profile_id")
+        saved_pin = js.localStorage.getItem("hc_pin")
+    except Exception:
+        saved_id, saved_pin = None, None
+    if not saved_id or not saved_pin:
+        await render_login()
+        return
+    try:
+        ok = await client.rpc("verify_pin", {"p_profile_id": saved_id, "p_pin": saved_pin})
+    except SupabaseError:
+        ok = False
+    if not ok:
+        clear_session()
+        await render_login()
+        return
+    profiles = await client.select("public_profiles", f"?id=eq.{saved_id}&select=id,name,points,level")
+    if not profiles:
+        clear_session()
+        await render_login()
+        return
+    current_pin = saved_pin
+    current_profile = profiles[0]
+    await refresh_profiles_cache()
+    await render_board()
+    await enable_push()
 
 
 # ---- shared shell ----
@@ -512,4 +571,4 @@ async def enable_push():
     })
 
 
-asyncio.ensure_future(render_login())
+asyncio.ensure_future(try_auto_login())

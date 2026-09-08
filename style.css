@@ -37,6 +37,23 @@ body {
 .app-frame { position: relative; max-width: 480px; margin: 0 auto; min-height: 60vh; }
 #app { padding-bottom: 1rem; }
 
+.skeleton {
+  background: linear-gradient(90deg, var(--border) 25%, var(--grey-soft) 50%, var(--border) 75%);
+  background-size: 200% 100%;
+  border-radius: 9px;
+  animation: skeleton-shimmer 1.4s ease-in-out infinite;
+}
+.skeleton-title { height: 1.3rem; width: 55%; margin-bottom: 1.1rem; }
+.skeleton-line { height: 0.9rem; width: 35%; margin-bottom: 1.4rem; }
+.skeleton-card { height: 4.4rem; border-radius: 12px; margin: 0.6rem 0; }
+@keyframes skeleton-shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .skeleton { animation: none; background: var(--border); }
+}
+
 #app h1 { font-family: var(--font-heading); font-size: 1.3rem; font-weight: 800; text-wrap: balance; margin: 0 0 1.1rem; }
 #app h2 {
   font-family: var(--font-heading); font-size: 0.76rem; font-weight: 700; text-transform: uppercase;
