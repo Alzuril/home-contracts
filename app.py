@@ -306,6 +306,12 @@ _polling_started = False
 async def poll_refresh(event=None):
     if current_profile is None:
         return
+    if document.getElementById("modal-overlay") is not None:
+        # Never refresh while a modal is open - render_board()/render_shop()
+        # unconditionally overwrite #modal-root with the FAB at the end,
+        # which was wiping out whatever the user was mid-typing (e.g. the
+        # create-contract form) every ~8s.
+        return
     try:
         await refresh_current_profile()
     except Exception:
