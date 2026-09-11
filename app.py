@@ -477,6 +477,15 @@ async def on_board_click(event):
     await render_board()
 
 
+def close_modal():
+    # show_fab()/show_shop_fab() refuse to touch #modal-root while a modal
+    # is open (that's what keeps the background poll from wiping a form
+    # the user is mid-typing) - which means a modal that just succeeded
+    # (contract created, rating submitted, item proposed/rejected) has to
+    # be closed explicitly before the follow-up render, or it never closes.
+    document.getElementById("modal-root").innerHTML = ""
+
+
 # ---- create-contract modal (FAB) ----
 
 def show_fab():
@@ -508,7 +517,7 @@ def open_create_modal():
       </div>
     """
     document.getElementById("submit-contract-btn").addEventListener("click", create_proxy(on_create_click))
-    document.getElementById("cancel-modal-btn").addEventListener("click", create_proxy(lambda e: show_fab()))
+    document.getElementById("cancel-modal-btn").addEventListener("click", create_proxy(lambda e: (close_modal(), show_fab())))
 
 
 async def on_create_click(event):
@@ -531,6 +540,7 @@ async def on_create_click(event):
     except SupabaseError as exc:
         error_el.innerText = f"Помилка: {exc.body}"
         return
+    close_modal()
     await render_board()
 
 
@@ -570,7 +580,7 @@ def render_confirm_modal():
     """
     document.getElementById("star-picker").addEventListener("click", create_proxy(on_star_click))
     document.getElementById("submit-rating-btn").addEventListener("click", create_proxy(on_submit_rating))
-    document.getElementById("cancel-rating-btn").addEventListener("click", create_proxy(lambda e: show_fab()))
+    document.getElementById("cancel-rating-btn").addEventListener("click", create_proxy(lambda e: (close_modal(), show_fab())))
 
 
 def on_star_click(event):
@@ -598,6 +608,7 @@ async def on_submit_rating(event):
     except SupabaseError as exc:
         error_el.innerText = f"Помилка: {exc.body}"
         return
+    close_modal()
     await refresh_current_profile()
     await render_board()
 
@@ -875,7 +886,7 @@ def open_propose_modal():
       </div>
     """
     document.getElementById("submit-item-btn").addEventListener("click", create_proxy(on_propose_item_click))
-    document.getElementById("cancel-item-modal-btn").addEventListener("click", create_proxy(lambda e: show_shop_fab()))
+    document.getElementById("cancel-item-modal-btn").addEventListener("click", create_proxy(lambda e: (close_modal(), show_shop_fab())))
 
 
 async def on_propose_item_click(event):
@@ -904,6 +915,7 @@ async def on_propose_item_click(event):
     except SupabaseError as exc:
         error_el.innerText = f"Помилка: {exc.body}"
         return
+    close_modal()
     await render_shop()
 
 
@@ -923,7 +935,7 @@ def open_reject_modal(item_id):
       </div>
     """
     document.getElementById("submit-reject-btn").addEventListener("click", create_proxy(on_submit_reject))
-    document.getElementById("cancel-reject-btn").addEventListener("click", create_proxy(lambda e: show_shop_fab()))
+    document.getElementById("cancel-reject-btn").addEventListener("click", create_proxy(lambda e: (close_modal(), show_shop_fab())))
 
 
 async def on_submit_reject(event):
@@ -941,6 +953,7 @@ async def on_submit_reject(event):
     except SupabaseError as exc:
         error_el.innerText = f"Помилка: {exc.body}"
         return
+    close_modal()
     await render_shop()
 
 
