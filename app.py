@@ -397,6 +397,8 @@ def contract_card_html(c):
     is_assignee = c.get("assignee_id") == current_profile["id"]
     if c["status"] == "open" and not is_author:
         buttons = f'<button class="accept-btn" data-id="{c["id"]}">Прийняти</button>'
+    elif c["status"] == "open" and is_author:
+        buttons = f'<button class="delete-contract-btn secondary" data-id="{c["id"]}">Видалити</button>'
     elif c["status"] == "accepted" and is_assignee:
         buttons = (
             f'<button class="complete-btn" data-id="{c["id"]}">Завершити</button>'
@@ -457,7 +459,7 @@ async def on_board_click(event):
         return
     action_map = {
         "accept-btn": "accept_contract", "decline-btn": "decline_contract",
-        "complete-btn": "complete_contract",
+        "complete-btn": "complete_contract", "delete-contract-btn": "delete_contract",
     }
     fn_name = next((v for k, v in action_map.items() if classes.contains(k)), None)
     if not fn_name:
