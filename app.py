@@ -136,6 +136,7 @@ async def on_signup_click(event):
     await refresh_profiles_cache()
     await render_board()
     await enable_push()
+    start_polling()
 
 
 async def on_login_click(event):
@@ -166,6 +167,7 @@ async def on_login_click(event):
     await refresh_profiles_cache()
     await render_board()
     await enable_push()
+    start_polling()
 
 
 async def do_logout(event=None):
@@ -222,8 +224,30 @@ async def try_auto_login(event=None):
     current_pin = saved_pin
     current_profile = profiles[0]
     await refresh_profiles_cache()
-    await render_board()
+    await restore_screen_or_board()
     await enable_push()
+    start_polling()
+
+
+async def restore_screen_or_board():
+    global _current_screen, _suppress_history_push
+    target_screen = None
+    try:
+        state = js.history.state
+        if state:
+            target_screen = state.to_py().get("screen")
+    except Exception:
+        target_screen = None
+    renderer = SCREEN_RENDERERS.get(target_screen)
+    if not renderer:
+        await render_board()
+        return
+    _current_screen = target_screen
+    _suppress_history_push = True
+    try:
+        await renderer()
+    finally:
+        _suppress_history_push = False
 
 
 # ---- in-app back navigation (History API) ----
@@ -253,8 +277,7 @@ async def on_popstate(event):
             screen = state.to_py().get("screen")
         except Exception:
             screen = None
-    renderer = {"board": render_board, "menu": render_menu, "profile": render_profile,
-                "history": render_history, "tasks": render_tasks, "shop": render_shop}.get(screen)
+    renderer = SCREEN_RENDERERS.get(screen)
     if not renderer or current_profile is None:
         return
     _current_screen = screen
@@ -266,6 +289,44 @@ async def on_popstate(event):
 
 
 js.window.addEventListener("popstate", create_proxy(on_popstate))
+
+
+def go_back():
+    try:
+        js.history.back()
+    except Exception:
+        pass
+
+
+# ---- background polling (no realtime websocket - just re-fetch periodically) ----
+
+_polling_started = False
+
+
+async def poll_refresh(event=None):
+    if current_profile is None:
+        return
+    try:
+        await refresh_current_profile()
+    except Exception:
+        return
+    renderer = SCREEN_RENDERERS.get(_current_screen)
+    if not renderer:
+        return
+    global _suppress_history_push
+    _suppress_history_push = True
+    try:
+        await renderer()
+    finally:
+        _suppress_history_push = False
+
+
+def start_polling():
+    global _polling_started
+    if _polling_started:
+        return
+    _polling_started = True
+    js.setInterval(create_proxy(poll_refresh), 8000)
 
 
 # ---- swipe right to open menu ----
@@ -288,7 +349,7 @@ async def on_touch_end(event):
     global _touch_start_x, _touch_start_y
     start_x, start_y = _touch_start_x, _touch_start_y
     _touch_start_x, _touch_start_y = None, None
-    if start_x is None or current_profile is None or _current_screen == "menu":
+    if start_x is None or current_profile is None:
         return
     touches = event.changedTouches
     if touches.length == 0:
@@ -296,8 +357,12 @@ async def on_touch_end(event):
     t = touches.item(0)
     dx = t.clientX - start_x
     dy = t.clientY - start_y
-    if dx > 80 and abs(dy) < 60 and document.getElementById("modal-overlay") is None:
+    if abs(dy) >= 60 or document.getElementById("modal-overlay") is not None:
+        return
+    if dx > 80 and _current_screen != "menu":
         await render_menu()
+    elif dx < -80 and _current_screen == "menu":
+        go_back()
 
 
 document.addEventListener("touchstart", create_proxy(on_touch_start), to_js(
@@ -318,7 +383,10 @@ def topbar_html(title):
 
 
 def wire_topbar():
-    document.getElementById("menu-btn").addEventListener("click", create_proxy(render_menu))
+    if _current_screen == "menu":
+        document.getElementById("menu-btn").addEventListener("click", create_proxy(lambda e: go_back()))
+    else:
+        document.getElementById("menu-btn").addEventListener("click", create_proxy(render_menu))
 
 
 # ---- board ----
@@ -533,6 +601,15 @@ async def render_menu(event=None):
     push_screen("menu")
     app = document.getElementById("app")
     document.getElementById("modal-root").innerHTML = ""
+    pending_count = 0
+    try:
+        pending_items = await client.select(
+            "shop_items", f"?status=eq.pending&proposer_id=neq.{current_profile['id']}&select=id"
+        )
+        pending_count = len(pending_items)
+    except SupabaseError:
+        pass
+    badge = f'<span class="menu-badge">{pending_count}</span>' if pending_count else ""
     app.innerHTML = f"""
       {topbar_html("Меню")}
       <button class="menu-row" id="nav-board">
@@ -553,7 +630,7 @@ async def render_menu(event=None):
       </button>
       <button class="menu-row" id="nav-shop">
         <span class="menu-icon" style="background:var(--purple-soft);color:var(--purple)">🎁</span>
-        Магазин <span class="chev">›</span>
+        Нагороди {badge}<span class="chev">›</span>
       </button>
       <button class="menu-row logout" id="nav-logout">
         <span class="menu-icon">↩</span>
@@ -698,8 +775,11 @@ def shop_item_card_html(item):
         buttons = f'<button class="buy-item-btn" data-id="{item["id"]}" {disabled}>Купити</button>'
         if not can_afford:
             meta = '<span class="card-meta">Не вистачає балів</span>'
-    elif item["status"] == "rejected" and item.get("reject_reason"):
-        meta = f'<span class="card-meta">Причина: {item["reject_reason"]}</span>'
+    elif item["status"] == "rejected":
+        if item.get("reject_reason"):
+            meta = f'<span class="card-meta">Причина: {item["reject_reason"]}</span>'
+        if is_proposer:
+            buttons = f'<button class="delete-item-btn secondary" data-id="{item["id"]}">Видалити</button>'
     return f"""
       <div class="contract-card" data-id="{item['id']}">
         <strong>{item['title']}</strong>
@@ -717,8 +797,8 @@ async def render_shop(event=None):
     items = await client.select("shop_items", "?order=created_at.desc")
     cards = "".join(shop_item_card_html(i) for i in items)
     app.innerHTML = f"""
-      {topbar_html("Магазин")}
-      <div id="shop-list">{cards or '<p class="empty-note">Порожньо. Натисни + внизу, щоб запропонувати плюшку.</p>'}</div>
+      {topbar_html("Нагороди")}
+      <div id="shop-list">{cards or '<p class="empty-note">Порожньо. Натисни + внизу, щоб додати нагороду.</p>'}</div>
     """
     wire_topbar()
     document.getElementById("shop-list").addEventListener("click", create_proxy(on_shop_click))
@@ -757,11 +837,20 @@ async def on_shop_click(event):
             return
         await refresh_current_profile()
         await render_shop()
+        return
+    if classes.contains("delete-item-btn"):
+        try:
+            await client.rpc("delete_shop_item", {
+                "p_profile_id": current_profile["id"], "p_pin": current_pin, "p_item_id": item_id,
+            })
+        except SupabaseError:
+            pass
+        await render_shop()
 
 
 def show_shop_fab():
     root = document.getElementById("modal-root")
-    root.innerHTML = '<button id="fab-btn" class="fab" aria-label="Запропонувати плюшку">+</button>'
+    root.innerHTML = '<button id="fab-btn" class="fab" aria-label="Додати нагороду">+</button>'
     document.getElementById("fab-btn").addEventListener("click", create_proxy(lambda e: open_propose_modal()))
 
 
@@ -770,10 +859,10 @@ def open_propose_modal():
     root.innerHTML = """
       <div class="modal-overlay" id="modal-overlay">
         <div class="modal-card">
-          <h2>Запропонувати плюшку</h2>
+          <h2>Додати нагороду</h2>
           <input id="new-item-title" class="title-input" placeholder="Наприклад: Пляшка вина" autocomplete="off" />
           <input id="new-item-price" type="number" min="1" value="10" placeholder="Ціна в балах" />
-          <button id="submit-item-btn" class="btn-primary">Запропонувати</button>
+          <button id="submit-item-btn" class="btn-primary">Додати нагороду</button>
           <p id="item-error" class="field-error"></p>
           <button id="cancel-item-modal-btn" class="link-btn">Скасувати</button>
         </div>
@@ -847,6 +936,12 @@ async def on_submit_reject(event):
         error_el.innerText = f"Помилка: {exc.body}"
         return
     await render_shop()
+
+
+SCREEN_RENDERERS = {
+    "board": render_board, "menu": render_menu, "profile": render_profile,
+    "history": render_history, "tasks": render_tasks, "shop": render_shop,
+}
 
 
 # ---- push ----
