@@ -254,7 +254,7 @@ async def on_popstate(event):
         except Exception:
             screen = None
     renderer = {"board": render_board, "menu": render_menu, "profile": render_profile,
-                "history": render_history, "tasks": render_tasks}.get(screen)
+                "history": render_history, "tasks": render_tasks, "shop": render_shop}.get(screen)
     if not renderer or current_profile is None:
         return
     _current_screen = screen
@@ -551,6 +551,10 @@ async def render_menu(event=None):
         <span class="menu-icon" style="background:var(--amber-soft);color:var(--amber)">📜</span>
         Історія виконаного <span class="chev">›</span>
       </button>
+      <button class="menu-row" id="nav-shop">
+        <span class="menu-icon" style="background:var(--purple-soft);color:var(--purple)">🎁</span>
+        Магазин <span class="chev">›</span>
+      </button>
       <button class="menu-row logout" id="nav-logout">
         <span class="menu-icon">↩</span>
         Вийти <span class="chev">›</span>
@@ -561,6 +565,7 @@ async def render_menu(event=None):
     document.getElementById("nav-profile").addEventListener("click", create_proxy(render_profile))
     document.getElementById("nav-tasks").addEventListener("click", create_proxy(render_tasks))
     document.getElementById("nav-history").addEventListener("click", create_proxy(render_history))
+    document.getElementById("nav-shop").addEventListener("click", create_proxy(render_shop))
     document.getElementById("nav-logout").addEventListener("click", create_proxy(do_logout))
 
 
@@ -666,6 +671,182 @@ async def render_tasks(event=None):
 
     document.getElementById("tab-given").addEventListener("click", create_proxy(set_tab("given")))
     document.getElementById("tab-received").addEventListener("click", create_proxy(set_tab("received")))
+
+
+# ---- shop ----
+
+SHOP_STATUS_LABELS = {"pending": "на голосуванні", "active": "у магазині", "rejected": "відхилено"}
+
+reject_target_id = None
+
+
+def shop_item_card_html(item):
+    is_proposer = item["proposer_id"] == current_profile["id"]
+    buttons = ""
+    meta = ""
+    if item["status"] == "pending":
+        if is_proposer:
+            meta = '<span class="card-meta">Очікує голосу другої людини</span>'
+        else:
+            buttons = (
+                f'<button class="approve-item-btn" data-id="{item["id"]}">Погодити</button>'
+                f'<button class="reject-item-btn secondary" data-id="{item["id"]}">Відхилити</button>'
+            )
+    elif item["status"] == "active":
+        can_afford = current_profile["points"] >= item["price"]
+        disabled = "" if can_afford else "disabled"
+        buttons = f'<button class="buy-item-btn" data-id="{item["id"]}" {disabled}>Купити</button>'
+        if not can_afford:
+            meta = '<span class="card-meta">Не вистачає балів</span>'
+    elif item["status"] == "rejected" and item.get("reject_reason"):
+        meta = f'<span class="card-meta">Причина: {item["reject_reason"]}</span>'
+    return f"""
+      <div class="contract-card" data-id="{item['id']}">
+        <strong>{item['title']}</strong>
+        <div><span class="points-chip">★ {item['price']}</span></div>
+        <div class="status-pill status-shop-{item['status']}">{SHOP_STATUS_LABELS[item['status']]}</div>
+        {meta}
+        <div class="actions">{buttons}</div>
+      </div>
+    """
+
+
+async def render_shop(event=None):
+    push_screen("shop")
+    app = document.getElementById("app")
+    items = await client.select("shop_items", "?order=created_at.desc")
+    cards = "".join(shop_item_card_html(i) for i in items)
+    app.innerHTML = f"""
+      {topbar_html("Магазин")}
+      <div id="shop-list">{cards or '<p class="empty-note">Порожньо. Натисни + внизу, щоб запропонувати плюшку.</p>'}</div>
+    """
+    wire_topbar()
+    document.getElementById("shop-list").addEventListener("click", create_proxy(on_shop_click))
+    show_shop_fab()
+
+
+async def on_shop_click(event):
+    global current_profile
+    target = event.target
+    item_id = target.getAttribute("data-id")
+    if not item_id:
+        return
+    classes = target.classList
+    if classes.contains("reject-item-btn"):
+        open_reject_modal(item_id)
+        return
+    if classes.contains("approve-item-btn"):
+        try:
+            await client.rpc("vote_shop_item", {
+                "p_profile_id": current_profile["id"], "p_pin": current_pin,
+                "p_item_id": item_id, "p_approve": True,
+            })
+        except SupabaseError:
+            pass
+        await render_shop()
+        return
+    if classes.contains("buy-item-btn"):
+        try:
+            await client.rpc("buy_shop_item", {
+                "p_profile_id": current_profile["id"], "p_pin": current_pin, "p_item_id": item_id,
+            })
+        except SupabaseError as exc:
+            document.getElementById("app").querySelector("h1").insertAdjacentHTML(
+                "afterend", f'<p class="field-error">Помилка: {exc.body}</p>'
+            )
+            return
+        await refresh_current_profile()
+        await render_shop()
+
+
+def show_shop_fab():
+    root = document.getElementById("modal-root")
+    root.innerHTML = '<button id="fab-btn" class="fab" aria-label="Запропонувати плюшку">+</button>'
+    document.getElementById("fab-btn").addEventListener("click", create_proxy(lambda e: open_propose_modal()))
+
+
+def open_propose_modal():
+    root = document.getElementById("modal-root")
+    root.innerHTML = """
+      <div class="modal-overlay" id="modal-overlay">
+        <div class="modal-card">
+          <h2>Запропонувати плюшку</h2>
+          <input id="new-item-title" class="title-input" placeholder="Наприклад: Пляшка вина" autocomplete="off" />
+          <input id="new-item-price" type="number" min="1" value="10" placeholder="Ціна в балах" />
+          <button id="submit-item-btn" class="btn-primary">Запропонувати</button>
+          <p id="item-error" class="field-error"></p>
+          <button id="cancel-item-modal-btn" class="link-btn">Скасувати</button>
+        </div>
+      </div>
+    """
+    document.getElementById("submit-item-btn").addEventListener("click", create_proxy(on_propose_item_click))
+    document.getElementById("cancel-item-modal-btn").addEventListener("click", create_proxy(lambda e: show_shop_fab()))
+
+
+async def on_propose_item_click(event):
+    title = document.getElementById("new-item-title").value
+    price = document.getElementById("new-item-price").value
+    error_el = document.getElementById("item-error")
+    error_el.innerText = ""
+    if not title.strip():
+        error_el.innerText = "Вкажи назву"
+        return
+    try:
+        price_int = int(price)
+    except ValueError:
+        error_el.innerText = "Вкажи ціну в балах"
+        return
+    if price_int <= 0:
+        error_el.innerText = "Ціна має бути більше нуля"
+        return
+    try:
+        await client.rpc("propose_shop_item", {
+            "p_proposer_id": current_profile["id"],
+            "p_pin": current_pin,
+            "p_title": title,
+            "p_price": price_int,
+        })
+    except SupabaseError as exc:
+        error_el.innerText = f"Помилка: {exc.body}"
+        return
+    await render_shop()
+
+
+def open_reject_modal(item_id):
+    global reject_target_id
+    reject_target_id = item_id
+    root = document.getElementById("modal-root")
+    root.innerHTML = """
+      <div class="modal-overlay" id="modal-overlay">
+        <div class="modal-card">
+          <h2>Відхилити пропозицію</h2>
+          <textarea id="reject-reason" placeholder="Причина (необов'язково)" rows="3"></textarea>
+          <button id="submit-reject-btn" class="btn-primary">Відхилити</button>
+          <p id="reject-error" class="field-error"></p>
+          <button id="cancel-reject-btn" class="link-btn">Скасувати</button>
+        </div>
+      </div>
+    """
+    document.getElementById("submit-reject-btn").addEventListener("click", create_proxy(on_submit_reject))
+    document.getElementById("cancel-reject-btn").addEventListener("click", create_proxy(lambda e: show_shop_fab()))
+
+
+async def on_submit_reject(event):
+    reason = document.getElementById("reject-reason").value.strip()
+    error_el = document.getElementById("reject-error")
+    error_el.innerText = ""
+    try:
+        await client.rpc("vote_shop_item", {
+            "p_profile_id": current_profile["id"],
+            "p_pin": current_pin,
+            "p_item_id": reject_target_id,
+            "p_approve": False,
+            "p_reject_reason": reason or None,
+        })
+    except SupabaseError as exc:
+        error_el.innerText = f"Помилка: {exc.body}"
+        return
+    await render_shop()
 
 
 # ---- push ----

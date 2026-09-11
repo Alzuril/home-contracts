@@ -13,6 +13,8 @@
   --amber-soft: #fbedd0;
   --green: #1f8a5f;
   --green-soft: #e2f4ea;
+  --purple: #a23e9c;
+  --purple-soft: #f3e5f2;
   --grey-soft: #ecebe6;
   --danger: #c23b2c;
   --avatar-1: #e15a2e;
@@ -158,6 +160,9 @@ body {
 .status-accepted { background: var(--blue-soft); color: var(--blue); }
 .status-done_pending_confirm { background: var(--amber-soft); color: var(--amber); }
 .status-confirmed { background: var(--green-soft); color: var(--green); }
+.status-shop-pending { background: var(--amber-soft); color: var(--amber); }
+.status-shop-active { background: var(--green-soft); color: var(--green); }
+.status-shop-rejected { background: var(--grey-soft); color: #56534b; }
 
 .card-meta { display: flex; align-items: center; gap: 0.4rem; margin-top: 0.55rem; font-size: 0.82rem; color: var(--text-muted); }
 
@@ -168,6 +173,7 @@ body {
 }
 .actions button.secondary { background: transparent; color: var(--text-muted); border-color: var(--border); }
 .actions button:hover { opacity: 0.9; }
+.actions button[disabled] { background: var(--grey-soft); border-color: var(--grey-soft); color: var(--text-muted); cursor: not-allowed; opacity: 1; }
 
 .empty-note { color: var(--text-muted); font-size: 0.88rem; padding: 0.5rem 0.1rem; }
 
