@@ -306,12 +306,6 @@ _polling_started = False
 async def poll_refresh(event=None):
     if current_profile is None:
         return
-    if document.getElementById("modal-overlay") is not None:
-        # Never refresh while a modal is open - render_board()/render_shop()
-        # unconditionally overwrite #modal-root with the FAB at the end,
-        # which was wiping out whatever the user was mid-typing (e.g. the
-        # create-contract form) every ~8s.
-        return
     try:
         await refresh_current_profile()
     except Exception:
@@ -484,6 +478,12 @@ async def on_board_click(event):
 # ---- create-contract modal (FAB) ----
 
 def show_fab():
+    if document.getElementById("modal-overlay") is not None:
+        # A modal (e.g. the create-contract form) is already open in
+        # #modal-root - don't stomp on it. Called on every render,
+        # including from the background poll, so this is what keeps a
+        # mid-typing form alive across a data refresh.
+        return
     root = document.getElementById("modal-root")
     root.innerHTML = '<button id="fab-btn" class="fab" aria-label="Кинути контракт">+</button>'
     document.getElementById("fab-btn").addEventListener("click", create_proxy(lambda e: open_create_modal()))
@@ -851,6 +851,8 @@ async def on_shop_click(event):
 
 
 def show_shop_fab():
+    if document.getElementById("modal-overlay") is not None:
+        return
     root = document.getElementById("modal-root")
     root.innerHTML = '<button id="fab-btn" class="fab" aria-label="Додати нагороду">+</button>'
     document.getElementById("fab-btn").addEventListener("click", create_proxy(lambda e: open_propose_modal()))
