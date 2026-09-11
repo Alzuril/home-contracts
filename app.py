@@ -268,6 +268,44 @@ async def on_popstate(event):
 js.window.addEventListener("popstate", create_proxy(on_popstate))
 
 
+# ---- swipe right to open menu ----
+
+_touch_start_x = None
+_touch_start_y = None
+
+
+def on_touch_start(event):
+    global _touch_start_x, _touch_start_y
+    touches = event.touches
+    if touches.length == 0:
+        return
+    t = touches.item(0)
+    _touch_start_x = t.clientX
+    _touch_start_y = t.clientY
+
+
+async def on_touch_end(event):
+    global _touch_start_x, _touch_start_y
+    start_x, start_y = _touch_start_x, _touch_start_y
+    _touch_start_x, _touch_start_y = None, None
+    if start_x is None or current_profile is None or _current_screen == "menu":
+        return
+    touches = event.changedTouches
+    if touches.length == 0:
+        return
+    t = touches.item(0)
+    dx = t.clientX - start_x
+    dy = t.clientY - start_y
+    if dx > 80 and abs(dy) < 60 and document.getElementById("modal-overlay") is None:
+        await render_menu()
+
+
+document.addEventListener("touchstart", create_proxy(on_touch_start), to_js(
+    {"passive": True}, dict_converter=js.Object.fromEntries
+))
+document.addEventListener("touchend", create_proxy(on_touch_end))
+
+
 # ---- shared shell ----
 
 def topbar_html(title):
