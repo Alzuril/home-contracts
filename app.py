@@ -65,7 +65,7 @@ def dates_meta_html(c):
 
 async def refresh_profiles_cache():
     global profiles_cache
-    rows = await client.select("public_profiles", "?select=id,name,points,level")
+    rows = await client.select("public_profiles", "?select=id,name,points")
     profiles_cache = {p["id"]: p for p in rows}
 
 
@@ -148,7 +148,7 @@ async def on_login_click(event):
     if not name:
         error_el.innerText = "Введи ім'я"
         return
-    matches = await client.select("public_profiles", f"?name=eq.{quote(name)}&select=id,name,points,level")
+    matches = await client.select("public_profiles", f"?name=eq.{quote(name)}&select=id,name,points")
     if not matches:
         error_el.innerText = "Профіль з таким іменем не знайдено"
         return
@@ -216,7 +216,7 @@ async def try_auto_login(event=None):
         clear_session()
         await render_login()
         return
-    profiles = await client.select("public_profiles", f"?id=eq.{saved_id}&select=id,name,points,level")
+    profiles = await client.select("public_profiles", f"?id=eq.{saved_id}&select=id,name,points")
     if not profiles:
         clear_session()
         await render_login()
@@ -436,7 +436,6 @@ async def render_board(event=None):
       {topbar_html(f"Привіт, {current_profile['name']}")}
       <div class="stat-row">
         <div class="stat-tile"><div class="stat-value">{current_profile['points']}</div><div class="stat-label">Балів</div></div>
-        <div class="stat-tile"><div class="stat-value">{current_profile['level']}</div><div class="stat-label">Рівень</div></div>
       </div>
       <h2>Дошка контрактів</h2>
       <div id="contracts-list">{cards or '<p class="empty-note">Порожньо. Натисни + внизу, щоб кинути перший контракт.</p>'}</div>
@@ -659,10 +658,7 @@ async def render_profile(event=None):
       {topbar_html("Профіль")}
       <div class="profile-header">
         {avatar_html(current_profile['name'], mine)}
-        <div>
-          <div class="profile-name">{current_profile['name']}</div>
-          <div class="profile-sub">Рівень {current_profile['level']}</div>
-        </div>
+        <div class="profile-name">{current_profile['name']}</div>
       </div>
       <div class="stat-row">
         <div class="stat-tile"><div class="stat-value">{current_profile['points']}</div><div class="stat-label">Балів</div></div>
