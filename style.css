@@ -97,26 +97,24 @@ body {
   to { opacity: 1; transform: translateX(0); }
 }
 
-.contract-card, .menu-row, .stat-tile, .shop-item-card {
+/* Entrance animations are opt-in per element, via .animate-in emitted by
+   the markup itself (see anim() in app.py). The background poll re-renders
+   the whole screen every ~8s, and it simply omits the class, so those
+   elements never animate.
+
+   Do NOT switch this back to animating the bare classes and suppressing
+   them from a parent while polling: an animation starts whenever
+   animation-name changes from none to a real name, so lifting such a
+   suppression is exactly what fires every animation it was meant to
+   prevent - which is why the screen kept flickering on every poll tick. */
+.contract-card.animate-in, .menu-row.animate-in, .stat-tile.animate-in {
   animation: fade-in-up 0.28s ease both;
 }
-.hero-circle { animation: pop-in 0.3s ease both; }
-.menu-badge { animation: badge-pop 0.25s ease both; }
+.hero-circle.animate-in { animation: pop-in 0.3s ease both; }
+.menu-badge.animate-in { animation: badge-pop 0.25s ease both; }
+.menu-screen.animate-in { animation: menu-slide-in 0.22s ease both; }
+/* the star picker lives in #modal-root, which the poll never re-renders */
 .star-btn.filled { animation: pop-in 0.18s ease both; }
-.menu-screen { animation: menu-slide-in 0.22s ease both; }
-
-/* background polling silently re-renders the current screen every ~8s -
-   replaying every entrance/press animation on each tick read as constant
-   flicker, so the poll marks #app "silent-refresh" for that one render
-   (see poll_refresh() in app.py) and this blanket rule kills ALL
-   animations/transitions anywhere under it, not just the ones listed
-   above by name - so a newly added animation can't reintroduce the same
-   flicker by accident. */
-#app.silent-refresh,
-#app.silent-refresh * {
-  animation: none !important;
-  transition: none !important;
-}
 
 button, .icon-btn, .fab, .actions button, .btn-primary, .tab-btn, .star-btn {
   transition: transform 0.12s ease, box-shadow 0.15s ease, background-color 0.15s ease, color 0.15s ease;
@@ -144,8 +142,8 @@ button:active, .icon-btn:active, .actions button:active, .btn-primary:active, .t
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .contract-card, .menu-row, .stat-tile, .shop-item-card, .hero-circle,
-  .modal-overlay, .modal-card, .menu-badge, .star-btn.filled, .menu-screen {
+  .contract-card, .menu-row, .stat-tile, .hero-circle, .menu-badge,
+  .menu-screen, .modal-overlay, .modal-card, .star-btn.filled {
     animation: none !important;
   }
   button, .icon-btn, .fab, .actions button, .btn-primary, .tab-btn, .star-btn {

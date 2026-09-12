@@ -21,6 +21,22 @@ STATUS_LABELS = {
     "done_pending_confirm": "чекає підтвердження", "confirmed": "виконано",
 }
 
+_silent_render = False
+
+
+def anim():
+    # Entrance animations are opted into by the markup itself, at the moment
+    # it is generated: a silent poll re-render simply never emits the class.
+    #
+    # It can NOT be done by marking a parent "don't animate" and clearing
+    # that mark afterwards: a CSS animation starts whenever animation-name
+    # goes from none to a real name, so clearing the mark is precisely what
+    # *starts* every animation it was supposed to prevent (measured with
+    # getAnimations(): 0 animations while the mark is set, 3 the instant it
+    # is removed). That's why the earlier "suppress during poll" attempts
+    # changed nothing except delaying the flicker by a couple of frames.
+    return "" if _silent_render else " animate-in"
+
 
 def avatar_color(profile_id):
     # Python's built-in hash() is randomized per process (Pyodide restarts
@@ -303,23 +319,6 @@ def go_back():
 _polling_started = False
 
 
-def _drop_silent_refresh_after_paint(app_el):
-    # Removing the "silent-refresh" class right after setting innerHTML
-    # does NOT work: that removal runs synchronously in the same tick, so
-    # the browser only ever gets to paint the *already-unsuppressed* state
-    # - the class is gone before a frame is ever rendered with it present,
-    # so the animations it's supposed to block still play every ~8s poll.
-    # Wait for two animation frames (guarantees at least one real paint
-    # happened while the class was still set) before lifting it.
-    def second_frame(_ts=None):
-        app_el.classList.remove("silent-refresh")
-
-    def first_frame(_ts=None):
-        js.requestAnimationFrame(create_proxy(second_frame))
-
-    js.requestAnimationFrame(create_proxy(first_frame))
-
-
 async def poll_refresh(event=None):
     if current_profile is None:
         return
@@ -330,17 +329,14 @@ async def poll_refresh(event=None):
     renderer = SCREEN_RENDERERS.get(_current_screen)
     if not renderer:
         return
-    global _suppress_history_push
+    global _suppress_history_push, _silent_render
     _suppress_history_push = True
-    app_el = document.getElementById("app")
-    if app_el:
-        app_el.classList.add("silent-refresh")
+    _silent_render = True
     try:
         await renderer()
     finally:
         _suppress_history_push = False
-        if app_el:
-            _drop_silent_refresh_after_paint(app_el)
+        _silent_render = False
 
 
 def start_polling():
@@ -436,7 +432,7 @@ def contract_card_html(c):
     )
     description = f'<p class="card-description">{c["description"]}</p>' if c.get("description") else ""
     return f"""
-      <div class="contract-card" data-id="{c['id']}">
+      <div class="contract-card{anim()}" data-id="{c['id']}">
         <strong>{c['title']}</strong>
         {description}
         {rating_chip_html(c)}
@@ -459,7 +455,7 @@ async def render_board(event=None):
     app.innerHTML = f"""
       {topbar_html(f"Привіт, {current_profile['name']}")}
       <div class="stat-row">
-        <div class="stat-tile"><div class="stat-value">{current_profile['points']}</div><div class="stat-label">Балів</div></div>
+        <div class="stat-tile{anim()}"><div class="stat-value">{current_profile['points']}</div><div class="stat-label">Балів</div></div>
       </div>
       <h2>Дошка контрактів</h2>
       <div id="contracts-list">{cards or '<p class="empty-note">Порожньо. Натисни + внизу, щоб кинути перший контракт.</p>'}</div>
@@ -672,31 +668,31 @@ async def render_menu(event=None):
         pending_count = len(pending_items)
     except SupabaseError:
         pass
-    badge = f'<span class="menu-badge">{pending_count}</span>' if pending_count else ""
+    badge = f'<span class="menu-badge{anim()}">{pending_count}</span>' if pending_count else ""
     app.innerHTML = f"""
       {topbar_html("Меню")}
-      <div class="menu-screen">
-        <button class="menu-row" id="nav-board">
+      <div class="menu-screen{anim()}">
+        <button class="menu-row{anim()}" id="nav-board">
           <span class="menu-icon" style="background:var(--accent-soft);color:var(--accent)">📋</span>
           Дошка контрактів <span class="chev">›</span>
         </button>
-        <button class="menu-row" id="nav-profile">
+        <button class="menu-row{anim()}" id="nav-profile">
           <span class="menu-icon" style="background:var(--blue-soft);color:var(--blue)">👤</span>
           Профіль <span class="chev">›</span>
         </button>
-        <button class="menu-row" id="nav-tasks">
+        <button class="menu-row{anim()}" id="nav-tasks">
           <span class="menu-icon" style="background:var(--green-soft);color:var(--green)">🔁</span>
           Усі контракти <span class="chev">›</span>
         </button>
-        <button class="menu-row" id="nav-history">
+        <button class="menu-row{anim()}" id="nav-history">
           <span class="menu-icon" style="background:var(--amber-soft);color:var(--amber)">📜</span>
           Історія виконаного <span class="chev">›</span>
         </button>
-        <button class="menu-row" id="nav-shop">
+        <button class="menu-row{anim()}" id="nav-shop">
           <span class="menu-icon" style="background:var(--purple-soft);color:var(--purple)">🎁</span>
           Нагороди {badge}<span class="chev">›</span>
         </button>
-        <button class="menu-row logout" id="nav-logout">
+        <button class="menu-row logout{anim()}" id="nav-logout">
           <span class="menu-icon">↩</span>
           Вийти <span class="chev">›</span>
         </button>
@@ -726,11 +722,11 @@ async def render_profile(event=None):
         {avatar_html(current_profile['name'], mine)}
         <div class="profile-name">{current_profile['name']}</div>
       </div>
-      <div class="hero-circle"><div class="hero-value">{current_profile['points']}</div></div>
+      <div class="hero-circle{anim()}"><div class="hero-value">{current_profile['points']}</div></div>
       <div class="stat-row">
-        <div class="stat-tile compact"><div class="stat-label">Балів</div><div class="stat-value">({current_profile['points']})</div></div>
-        <div class="stat-tile compact"><div class="stat-label">Виконано</div><div class="stat-value">({completed_by_me})</div></div>
-        <div class="stat-tile compact"><div class="stat-label">Створено</div><div class="stat-value">({given_by_me})</div></div>
+        <div class="stat-tile compact{anim()}"><div class="stat-label">Балів</div><div class="stat-value">({current_profile['points']})</div></div>
+        <div class="stat-tile compact{anim()}"><div class="stat-label">Виконано</div><div class="stat-value">({completed_by_me})</div></div>
+        <div class="stat-tile compact{anim()}"><div class="stat-label">Створено</div><div class="stat-value">({given_by_me})</div></div>
       </div>
     """
     wire_topbar()
@@ -746,7 +742,7 @@ async def render_history(event=None):
     done = [c for c in contracts if c["status"] == "confirmed" and mine in (c["author_id"], c["assignee_id"])]
     done.sort(key=lambda c: c["created_at"], reverse=True)
     rows = "".join(f"""
-      <div class="contract-card">
+      <div class="contract-card{anim()}">
         <strong>{c['title']}</strong>
         {f'<p class="card-description">{c["description"]}</p>' if c.get("description") else ""}
         {rating_chip_html(c)}
@@ -781,7 +777,7 @@ async def render_tasks(event=None):
             if other_id else '<span class="card-meta">ще ніхто не взяв</span>'
         )
         return f"""
-          <div class="contract-card">
+          <div class="contract-card{anim()}">
             <strong>{c['title']}</strong>
             {f'<p class="card-description">{c["description"]}</p>' if c.get("description") else ""}
             {rating_chip_html(c)}
@@ -844,7 +840,7 @@ def shop_item_card_html(item):
         if is_proposer:
             buttons = f'<button class="delete-item-btn secondary" data-id="{item["id"]}">Видалити</button>'
     return f"""
-      <div class="contract-card" data-id="{item['id']}">
+      <div class="contract-card{anim()}" data-id="{item['id']}">
         <strong>{item['title']}</strong>
         <div><span class="points-chip">★ {item['price']}</span></div>
         <div class="status-pill status-shop-{item['status']}">{SHOP_STATUS_LABELS[item['status']]}</div>
