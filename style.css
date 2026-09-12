@@ -22,10 +22,10 @@
   --avatar-3: #a23e9c;
   --avatar-4: #1f8a5f;
   --avatar-5: #b5790a;
-  --card-shadow: 0 10px 24px rgba(32, 29, 24, 0.07);
-  --card-shadow-lift: 0 14px 30px rgba(32, 29, 24, 0.12);
-  --glass: rgba(255, 255, 255, 0.6);
-  --card-wash: linear-gradient(150deg, rgba(255,255,255,0.85) 0%, rgba(150,232,196,0.5) 45%, rgba(255,184,150,0.45) 100%);
+  --card-shadow: 0 12px 26px rgba(32, 29, 24, 0.1);
+  --card-shadow-lift: 0 16px 32px rgba(32, 29, 24, 0.15);
+  --glass: rgba(255, 255, 255, 0.88);
+  --card-wash: linear-gradient(150deg, rgba(255,255,255,0.97) 0%, rgba(150,232,196,0.32) 48%, rgba(255,184,150,0.28) 100%);
   --font-heading: 'Manrope', system-ui, -apple-system, sans-serif;
   --font-body: 'Inter', system-ui, -apple-system, sans-serif;
 }
