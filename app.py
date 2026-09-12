@@ -26,7 +26,9 @@ _silent_render = False
 
 def anim():
     # Entrance animations are opted into by the markup itself, at the moment
-    # it is generated: a silent poll re-render simply never emits the class.
+    # it is generated: a re-render of the screen already on screen (the
+    # background poll, or an action button refreshing its own list) simply
+    # never emits the class. See push_screen(), which decides this.
     #
     # It can NOT be done by marking a parent "don't animate" and clearing
     # that mark afterwards: a CSS animation starts whenever animation-name
@@ -270,10 +272,19 @@ async def restore_screen_or_board():
 
 _current_screen = None
 _suppress_history_push = False
+_rendered_screen = None
 
 
 def push_screen(name):
-    global _current_screen
+    global _current_screen, _rendered_screen, _silent_render
+    # Every renderer starts here, so this is the one place that knows
+    # whether the user is arriving at a screen or the same screen is being
+    # drawn again in place - by the background poll, or by an action button
+    # (accept/complete/buy/create...) that refreshes the list it lives on.
+    # Only arriving is worth an entrance animation; re-drawing the screen
+    # you are already looking at just reads as the whole thing blinking.
+    _silent_render = _rendered_screen == name
+    _rendered_screen = name
     if _suppress_history_push or _current_screen == name:
         _current_screen = name
         return
@@ -329,14 +340,14 @@ async def poll_refresh(event=None):
     renderer = SCREEN_RENDERERS.get(_current_screen)
     if not renderer:
         return
-    global _suppress_history_push, _silent_render
+    global _suppress_history_push
     _suppress_history_push = True
-    _silent_render = True
     try:
+        # the poll always re-renders the screen already on screen, so
+        # push_screen() marks this render silent on its own
         await renderer()
     finally:
         _suppress_history_push = False
-        _silent_render = False
 
 
 def start_polling():
