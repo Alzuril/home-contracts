@@ -303,6 +303,23 @@ def go_back():
 _polling_started = False
 
 
+def _drop_silent_refresh_after_paint(app_el):
+    # Removing the "silent-refresh" class right after setting innerHTML
+    # does NOT work: that removal runs synchronously in the same tick, so
+    # the browser only ever gets to paint the *already-unsuppressed* state
+    # - the class is gone before a frame is ever rendered with it present,
+    # so the animations it's supposed to block still play every ~8s poll.
+    # Wait for two animation frames (guarantees at least one real paint
+    # happened while the class was still set) before lifting it.
+    def second_frame(_ts=None):
+        app_el.classList.remove("silent-refresh")
+
+    def first_frame(_ts=None):
+        js.requestAnimationFrame(create_proxy(second_frame))
+
+    js.requestAnimationFrame(create_proxy(first_frame))
+
+
 async def poll_refresh(event=None):
     if current_profile is None:
         return
@@ -323,7 +340,7 @@ async def poll_refresh(event=None):
     finally:
         _suppress_history_push = False
         if app_el:
-            app_el.classList.remove("silent-refresh")
+            _drop_silent_refresh_after_paint(app_el)
 
 
 def start_polling():
