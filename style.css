@@ -92,6 +92,10 @@ body {
 @keyframes spin {
   to { transform: rotate(360deg); }
 }
+@keyframes menu-slide-in {
+  from { opacity: 0; transform: translateX(28px); }
+  to { opacity: 1; transform: translateX(0); }
+}
 
 .contract-card, .menu-row, .stat-tile, .shop-item-card {
   animation: fade-in-up 0.28s ease both;
@@ -99,18 +103,19 @@ body {
 .hero-circle { animation: pop-in 0.3s ease both; }
 .menu-badge { animation: badge-pop 0.25s ease both; }
 .star-btn.filled { animation: pop-in 0.18s ease both; }
+.menu-screen { animation: menu-slide-in 0.22s ease both; }
 
 /* background polling silently re-renders the current screen every ~8s -
-   replaying entrance animations on every tick reads as constant flicker,
-   so the poll marks #app and every animation above is suppressed for that
-   one render (see poll_refresh() in app.py) */
-#app.silent-refresh .contract-card,
-#app.silent-refresh .menu-row,
-#app.silent-refresh .stat-tile,
-#app.silent-refresh .shop-item-card,
-#app.silent-refresh .hero-circle,
-#app.silent-refresh .menu-badge {
+   replaying every entrance/press animation on each tick read as constant
+   flicker, so the poll marks #app "silent-refresh" for that one render
+   (see poll_refresh() in app.py) and this blanket rule kills ALL
+   animations/transitions anywhere under it, not just the ones listed
+   above by name - so a newly added animation can't reintroduce the same
+   flicker by accident. */
+#app.silent-refresh,
+#app.silent-refresh * {
   animation: none !important;
+  transition: none !important;
 }
 
 button, .icon-btn, .fab, .actions button, .btn-primary, .tab-btn, .star-btn {
@@ -140,7 +145,7 @@ button:active, .icon-btn:active, .actions button:active, .btn-primary:active, .t
 
 @media (prefers-reduced-motion: reduce) {
   .contract-card, .menu-row, .stat-tile, .shop-item-card, .hero-circle,
-  .modal-overlay, .modal-card, .menu-badge, .star-btn.filled {
+  .modal-overlay, .modal-card, .menu-badge, .star-btn.filled, .menu-screen {
     animation: none !important;
   }
   button, .icon-btn, .fab, .actions button, .btn-primary, .tab-btn, .star-btn {

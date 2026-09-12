@@ -675,30 +675,32 @@ async def render_menu(event=None):
     badge = f'<span class="menu-badge">{pending_count}</span>' if pending_count else ""
     app.innerHTML = f"""
       {topbar_html("Меню")}
-      <button class="menu-row" id="nav-board">
-        <span class="menu-icon" style="background:var(--accent-soft);color:var(--accent)">📋</span>
-        Дошка контрактів <span class="chev">›</span>
-      </button>
-      <button class="menu-row" id="nav-profile">
-        <span class="menu-icon" style="background:var(--blue-soft);color:var(--blue)">👤</span>
-        Профіль <span class="chev">›</span>
-      </button>
-      <button class="menu-row" id="nav-tasks">
-        <span class="menu-icon" style="background:var(--green-soft);color:var(--green)">🔁</span>
-        Усі контракти <span class="chev">›</span>
-      </button>
-      <button class="menu-row" id="nav-history">
-        <span class="menu-icon" style="background:var(--amber-soft);color:var(--amber)">📜</span>
-        Історія виконаного <span class="chev">›</span>
-      </button>
-      <button class="menu-row" id="nav-shop">
-        <span class="menu-icon" style="background:var(--purple-soft);color:var(--purple)">🎁</span>
-        Нагороди {badge}<span class="chev">›</span>
-      </button>
-      <button class="menu-row logout" id="nav-logout">
-        <span class="menu-icon">↩</span>
-        Вийти <span class="chev">›</span>
-      </button>
+      <div class="menu-screen">
+        <button class="menu-row" id="nav-board">
+          <span class="menu-icon" style="background:var(--accent-soft);color:var(--accent)">📋</span>
+          Дошка контрактів <span class="chev">›</span>
+        </button>
+        <button class="menu-row" id="nav-profile">
+          <span class="menu-icon" style="background:var(--blue-soft);color:var(--blue)">👤</span>
+          Профіль <span class="chev">›</span>
+        </button>
+        <button class="menu-row" id="nav-tasks">
+          <span class="menu-icon" style="background:var(--green-soft);color:var(--green)">🔁</span>
+          Усі контракти <span class="chev">›</span>
+        </button>
+        <button class="menu-row" id="nav-history">
+          <span class="menu-icon" style="background:var(--amber-soft);color:var(--amber)">📜</span>
+          Історія виконаного <span class="chev">›</span>
+        </button>
+        <button class="menu-row" id="nav-shop">
+          <span class="menu-icon" style="background:var(--purple-soft);color:var(--purple)">🎁</span>
+          Нагороди {badge}<span class="chev">›</span>
+        </button>
+        <button class="menu-row logout" id="nav-logout">
+          <span class="menu-icon">↩</span>
+          Вийти <span class="chev">›</span>
+        </button>
+      </div>
     """
     wire_topbar()
     document.getElementById("nav-board").addEventListener("click", create_proxy(render_board))
