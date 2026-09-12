@@ -32,6 +32,17 @@ jobs:
           VAPID_PUBLIC_KEY = "${{ secrets.VAPID_PUBLIC_KEY }}"
           PYEOF
 
+      - name: Cache-bust style.css and app.py
+        # Without this, phones (especially the installed PWA) can keep
+        # serving an old cached copy of app.py/style.css indefinitely after
+        # a deploy - every fix looks like it "didn't do anything" even
+        # though the new bytes are live on Pages, because the browser
+        # never re-requests them. Tying the query string to the commit SHA
+        # forces a fresh fetch on every deploy.
+        run: |
+          sed -i "s/style\.css\"/style.css?v=${{ github.sha }}\"/" index.html
+          sed -i "s/src=\"app\.py\"/src=\"app.py?v=${{ github.sha }}\"/" index.html
+
       - name: Setup Pages
         uses: actions/configure-pages@v5
 
