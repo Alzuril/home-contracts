@@ -57,10 +57,10 @@ def format_date(value):
 
 
 def dates_meta_html(c):
-    parts = [f"Створено {format_date(c['created_at'])}"]
+    lines = [f'<span class="date-line">📅 Створено {format_date(c["created_at"])}</span>']
     if c.get("due_date"):
-        parts.append(f"Дедлайн {format_date(c['due_date'])}")
-    return f'<span class="card-meta">{" · ".join(parts)}</span>'
+        lines.append(f'<span class="date-line">⏰ Дедлайн {format_date(c["due_date"])}</span>')
+    return f'<div class="date-lines">{"".join(lines)}</div>'
 
 
 async def refresh_profiles_cache():
@@ -679,10 +679,11 @@ async def render_profile(event=None):
         {avatar_html(current_profile['name'], mine)}
         <div class="profile-name">{current_profile['name']}</div>
       </div>
+      <div class="hero-circle"><div class="hero-value">{current_profile['points']}</div></div>
       <div class="stat-row">
-        <div class="stat-tile"><div class="stat-value">{current_profile['points']}</div><div class="stat-label">Балів</div></div>
-        <div class="stat-tile"><div class="stat-value">{completed_by_me}</div><div class="stat-label">Виконано</div></div>
-        <div class="stat-tile"><div class="stat-value">{given_by_me}</div><div class="stat-label">Створено</div></div>
+        <div class="stat-tile compact"><div class="stat-label">Балів</div><div class="stat-value">({current_profile['points']})</div></div>
+        <div class="stat-tile compact"><div class="stat-label">Виконано</div><div class="stat-value">({completed_by_me})</div></div>
+        <div class="stat-tile compact"><div class="stat-label">Створено</div><div class="stat-value">({given_by_me})</div></div>
       </div>
     """
     wire_topbar()
@@ -789,7 +790,7 @@ def shop_item_card_html(item):
         disabled = "" if can_afford else "disabled"
         buttons = f'<button class="buy-item-btn" data-id="{item["id"]}" {disabled}>Купити</button>'
         if not can_afford:
-            meta = '<span class="card-meta">Не вистачає балів</span>'
+            meta = '<span class="card-meta">⚠️ Не вистачає балів</span>'
     elif item["status"] == "rejected":
         if item.get("reject_reason"):
             meta = f'<span class="card-meta">Причина: {item["reject_reason"]}</span>'

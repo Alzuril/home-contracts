@@ -22,8 +22,9 @@
   --avatar-3: #a23e9c;
   --avatar-4: #1f8a5f;
   --avatar-5: #b5790a;
-  --card-shadow: 0 10px 24px rgba(32, 29, 24, 0.06);
-  --card-shadow-lift: 0 14px 30px rgba(32, 29, 24, 0.1);
+  --card-shadow: 0 10px 24px rgba(32, 29, 24, 0.07);
+  --card-shadow-lift: 0 14px 30px rgba(32, 29, 24, 0.12);
+  --glass: rgba(255, 255, 255, 0.7);
   --font-heading: 'Manrope', system-ui, -apple-system, sans-serif;
   --font-body: 'Inter', system-ui, -apple-system, sans-serif;
 }
@@ -35,9 +36,10 @@ body {
   padding: 1.5rem 1rem 5.5rem;
   background-color: var(--bg);
   background-image:
-    radial-gradient(560px circle at 10% -5%, rgba(126, 224, 181, 0.45), transparent 62%),
-    radial-gradient(480px circle at 105% 12%, rgba(255, 178, 140, 0.4), transparent 60%),
-    radial-gradient(520px circle at -5% 100%, rgba(255, 178, 140, 0.22), transparent 60%);
+    radial-gradient(600px circle at 12% -8%, rgba(126, 224, 181, 0.6), transparent 60%),
+    radial-gradient(520px circle at 108% 10%, rgba(255, 178, 140, 0.55), transparent 58%),
+    radial-gradient(560px circle at -8% 62%, rgba(126, 224, 181, 0.4), transparent 55%),
+    radial-gradient(560px circle at 100% 105%, rgba(255, 178, 140, 0.4), transparent 58%);
   background-attachment: fixed;
   background-repeat: no-repeat;
   color: var(--text);
@@ -86,8 +88,8 @@ body {
 }
 
 .btn-primary {
-  font-family: var(--font-body); font-size: 0.95rem; font-weight: 700; padding: 0.7rem 0.8rem; margin: 0.25rem 0;
-  width: 100%; border-radius: 16px; border: none; background: var(--accent); color: #fff; cursor: pointer;
+  font-family: var(--font-body); font-size: 0.95rem; font-weight: 700; padding: 0.75rem 0.8rem; margin: 0.25rem 0;
+  width: 100%; border-radius: 20px; border: none; background: var(--accent); color: #fff; cursor: pointer;
   box-shadow: 0 8px 18px rgba(255, 122, 89, 0.28);
 }
 .btn-primary:hover { background: var(--accent-hover); }
@@ -109,7 +111,8 @@ body {
 .topbar { display: flex; align-items: center; gap: 0.7rem; margin-bottom: 1.2rem; }
 .icon-btn {
   width: 42px; height: 42px; flex: none; border-radius: 14px; border: none;
-  background: var(--surface); color: var(--text); font-size: 1.1rem; cursor: pointer;
+  background: var(--glass); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+  color: var(--text); font-size: 1.1rem; cursor: pointer;
   display: flex; align-items: center; justify-content: center; box-shadow: var(--card-shadow);
 }
 .icon-btn:hover { color: var(--accent); }
@@ -117,7 +120,8 @@ body {
 
 /* menu screen */
 .menu-row {
-  display: flex; align-items: center; gap: 0.85rem; width: 100%; background: var(--surface);
+  display: flex; align-items: center; gap: 0.85rem; width: 100%;
+  background: var(--glass); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
   border: none; border-radius: 20px; padding: 0.9rem 1.1rem; margin: 0.55rem 0;
   cursor: pointer; text-align: left; font-family: var(--font-body); font-size: 0.95rem; font-weight: 600; color: var(--text);
   box-shadow: var(--card-shadow); transition: box-shadow 0.15s ease, transform 0.15s ease;
@@ -149,16 +153,31 @@ body {
 
 .stat-row { display: flex; gap: 0.7rem; }
 .stat-tile {
-  flex: 1; background: var(--surface); border: none; border-radius: 22px;
+  flex: 1; background: var(--glass); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+  border: none; border-radius: 22px;
   padding: 1.1rem 1rem; box-shadow: var(--card-shadow); text-align: center;
 }
 .stat-tile .stat-value { font-family: var(--font-heading); font-size: 1.9rem; font-weight: 800; font-variant-numeric: tabular-nums; }
 .stat-tile .stat-label { font-size: 0.72rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; margin-top: 0.2rem; }
 
+.stat-tile.compact { padding: 0.8rem 0.6rem; }
+.stat-tile.compact .stat-label { font-size: 0.68rem; margin: 0 0 0.3rem; }
+.stat-tile.compact .stat-value { font-size: 1.15rem; margin-top: 0; }
+
+.hero-circle {
+  width: 132px; height: 132px; border-radius: 50%; margin: 0.4rem auto 1.4rem;
+  background: var(--accent); display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 16px 32px rgba(255, 122, 89, 0.4), 0 0 0 6px rgba(255,255,255,0.5);
+}
+.hero-value {
+  font-family: var(--font-heading); font-size: 2.6rem; font-weight: 800; color: #fff;
+  font-variant-numeric: tabular-nums;
+}
+
 /* contract cards + rows */
 .contract-card {
-  border: none; background: var(--surface); border-radius: 22px;
-  padding: 1rem 1.1rem; margin: 0.7rem 0; box-shadow: var(--card-shadow);
+  border: none; background: var(--glass); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+  border-radius: 24px; padding: 1.1rem 1.2rem; margin: 0.8rem 0; box-shadow: var(--card-shadow);
 }
 .contract-card strong { font-size: 1rem; }
 .card-description { font-size: 0.85rem; color: var(--text-muted); margin: 0.35rem 0 0; line-height: 1.4; }
@@ -182,10 +201,12 @@ body {
 .status-shop-rejected { background: var(--grey-soft); color: #56534b; }
 
 .card-meta { display: flex; align-items: center; gap: 0.4rem; margin-top: 0.55rem; font-size: 0.82rem; color: var(--text-muted); }
+.date-lines { margin-top: 0.5rem; }
+.date-line { display: block; font-size: 0.8rem; color: var(--text-muted); margin-top: 0.2rem; }
 
 .actions { display: flex; align-items: center; gap: 0.9rem; margin-top: 0.8rem; flex-wrap: wrap; }
 .actions button {
-  width: auto; margin: 0; padding: 0.5rem 1rem; font-size: 0.85rem; font-weight: 700; border-radius: 12px;
+  width: auto; margin: 0; padding: 0.55rem 1.2rem; font-size: 0.85rem; font-weight: 700; border-radius: 18px;
   border: none; background: var(--accent); color: #fff; cursor: pointer; box-shadow: 0 6px 14px rgba(255, 122, 89, 0.25);
 }
 .actions button.secondary {
@@ -206,7 +227,7 @@ body {
   flex: 1; border: none; background: transparent; padding: 0.55rem; border-radius: 13px; font-family: var(--font-body);
   font-weight: 700; font-size: 0.85rem; color: var(--text-muted); cursor: pointer;
 }
-.tab-btn.active { background: var(--surface); color: var(--text); box-shadow: var(--card-shadow); }
+.tab-btn.active { background: var(--glass); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); color: var(--text); box-shadow: var(--card-shadow); }
 
 /* FAB - centered at the bottom, matching the reference mockup */
 .fab {
