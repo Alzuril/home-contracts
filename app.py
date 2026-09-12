@@ -634,12 +634,22 @@ def render_confirm_modal():
 
 
 def on_star_click(event):
+    # Update the stars in place instead of re-rendering the modal: rebuilding
+    # #modal-root would recreate the overlay and the card, replaying their
+    # open animations on every single star tap (that's the blink).
     global selected_rating
     value = event.target.getAttribute("data-value")
     if not value:
         return
     selected_rating = int(value)
-    render_confirm_modal()
+    stars = document.getElementById("star-picker").querySelectorAll(".star-btn")
+    for i in range(stars.length):
+        star = stars.item(i)
+        if int(star.getAttribute("data-value")) <= selected_rating:
+            star.classList.add("filled")
+        else:
+            star.classList.remove("filled")
+    document.getElementById("submit-rating-btn").disabled = selected_rating == 0
 
 
 async def on_submit_rating(event):
