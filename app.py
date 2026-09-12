@@ -315,10 +315,15 @@ async def poll_refresh(event=None):
         return
     global _suppress_history_push
     _suppress_history_push = True
+    app_el = document.getElementById("app")
+    if app_el:
+        app_el.classList.add("silent-refresh")
     try:
         await renderer()
     finally:
         _suppress_history_push = False
+        if app_el:
+            app_el.classList.remove("silent-refresh")
 
 
 def start_polling():
@@ -464,17 +469,36 @@ async def on_board_click(event):
     fn_name = next((v for k, v in action_map.items() if classes.contains(k)), None)
     if not fn_name:
         return
+    set_loading(target)
     try:
         await client.rpc(fn_name, {
             "p_contract_id": contract_id, "p_profile_id": current_profile["id"], "p_pin": current_pin,
         })
     except SupabaseError as exc:
+        unset_loading(target)
         document.getElementById("app").querySelector("h1").insertAdjacentHTML(
             "afterend", f'<p class="field-error">Помилка: {exc.body}</p>'
         )
         return
     await refresh_current_profile()
     await render_board()
+
+
+def set_loading(btn):
+    # visual feedback while an RPC is in flight - most actions here just
+    # re-render the whole screen on success, so this only really needs to
+    # be reversed on the error paths (see unset_loading below).
+    if btn is None:
+        return
+    btn.classList.add("is-loading")
+    btn.disabled = True
+
+
+def unset_loading(btn):
+    if btn is None:
+        return
+    btn.classList.remove("is-loading")
+    btn.disabled = False
 
 
 def close_modal():
@@ -529,6 +553,7 @@ async def on_create_click(event):
     if not title.strip():
         error_el.innerText = "Вкажи назву"
         return
+    set_loading(event.target)
     try:
         await client.rpc("create_contract", {
             "p_author_id": current_profile["id"],
@@ -538,6 +563,7 @@ async def on_create_click(event):
             "p_due_date": due_date,
         })
     except SupabaseError as exc:
+        unset_loading(event.target)
         error_el.innerText = f"Помилка: {exc.body}"
         return
     close_modal()
@@ -598,6 +624,7 @@ async def on_submit_rating(event):
     if selected_rating == 0:
         error_el.innerText = "Постав оцінку"
         return
+    set_loading(event.target)
     try:
         await client.rpc("confirm_contract", {
             "p_contract_id": confirm_target_id,
@@ -606,6 +633,7 @@ async def on_submit_rating(event):
             "p_rating": selected_rating,
         })
     except SupabaseError as exc:
+        unset_loading(event.target)
         error_el.innerText = f"Помилка: {exc.body}"
         return
     close_modal()
@@ -832,21 +860,24 @@ async def on_shop_click(event):
         open_reject_modal(item_id)
         return
     if classes.contains("approve-item-btn"):
+        set_loading(target)
         try:
             await client.rpc("vote_shop_item", {
                 "p_profile_id": current_profile["id"], "p_pin": current_pin,
                 "p_item_id": item_id, "p_approve": True,
             })
         except SupabaseError:
-            pass
+            unset_loading(target)
         await render_shop()
         return
     if classes.contains("buy-item-btn"):
+        set_loading(target)
         try:
             await client.rpc("buy_shop_item", {
                 "p_profile_id": current_profile["id"], "p_pin": current_pin, "p_item_id": item_id,
             })
         except SupabaseError as exc:
+            unset_loading(target)
             document.getElementById("app").querySelector("h1").insertAdjacentHTML(
                 "afterend", f'<p class="field-error">Помилка: {exc.body}</p>'
             )
@@ -855,12 +886,13 @@ async def on_shop_click(event):
         await render_shop()
         return
     if classes.contains("delete-item-btn"):
+        set_loading(target)
         try:
             await client.rpc("delete_shop_item", {
                 "p_profile_id": current_profile["id"], "p_pin": current_pin, "p_item_id": item_id,
             })
         except SupabaseError:
-            pass
+            unset_loading(target)
         await render_shop()
 
 
@@ -906,6 +938,7 @@ async def on_propose_item_click(event):
     if price_int <= 0:
         error_el.innerText = "Ціна має бути більше нуля"
         return
+    set_loading(event.target)
     try:
         await client.rpc("propose_shop_item", {
             "p_proposer_id": current_profile["id"],
@@ -914,6 +947,7 @@ async def on_propose_item_click(event):
             "p_price": price_int,
         })
     except SupabaseError as exc:
+        unset_loading(event.target)
         error_el.innerText = f"Помилка: {exc.body}"
         return
     close_modal()
@@ -943,6 +977,7 @@ async def on_submit_reject(event):
     reason = document.getElementById("reject-reason").value.strip()
     error_el = document.getElementById("reject-error")
     error_el.innerText = ""
+    set_loading(event.target)
     try:
         await client.rpc("vote_shop_item", {
             "p_profile_id": current_profile["id"],
@@ -952,6 +987,7 @@ async def on_submit_reject(event):
             "p_reject_reason": reason or None,
         })
     except SupabaseError as exc:
+        unset_loading(event.target)
         error_el.innerText = f"Помилка: {exc.body}"
         return
     close_modal()

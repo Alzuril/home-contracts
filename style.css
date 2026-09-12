@@ -84,28 +84,69 @@ body {
   0% { opacity: 0; transform: scale(0.85); }
   100% { opacity: 1; transform: scale(1); }
 }
+@keyframes badge-pop {
+  0% { transform: scale(0); }
+  70% { transform: scale(1.15); }
+  100% { transform: scale(1); }
+}
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
 
 .contract-card, .menu-row, .stat-tile, .shop-item-card {
   animation: fade-in-up 0.28s ease both;
 }
 .hero-circle { animation: pop-in 0.3s ease both; }
+.menu-badge { animation: badge-pop 0.25s ease both; }
+.star-btn.filled { animation: pop-in 0.18s ease both; }
 
-button, .icon-btn, .fab, .actions button, .btn-primary, .tab-btn {
+/* background polling silently re-renders the current screen every ~8s -
+   replaying entrance animations on every tick reads as constant flicker,
+   so the poll marks #app and every animation above is suppressed for that
+   one render (see poll_refresh() in app.py) */
+#app.silent-refresh .contract-card,
+#app.silent-refresh .menu-row,
+#app.silent-refresh .stat-tile,
+#app.silent-refresh .shop-item-card,
+#app.silent-refresh .hero-circle,
+#app.silent-refresh .menu-badge {
+  animation: none !important;
+}
+
+button, .icon-btn, .fab, .actions button, .btn-primary, .tab-btn, .star-btn {
   transition: transform 0.12s ease, box-shadow 0.15s ease, background-color 0.15s ease, color 0.15s ease;
 }
-button:active, .icon-btn:active, .actions button:active, .btn-primary:active, .tab-btn:active {
+button:active, .icon-btn:active, .actions button:active, .btn-primary:active, .tab-btn:active, .star-btn:active {
   transform: scale(0.96);
 }
 .fab:active { transform: translateX(-50%) scale(0.92); }
 
+/* inline spinner feedback while an action's RPC call is in flight */
+.is-loading {
+  color: transparent !important;
+  pointer-events: none;
+  position: relative;
+}
+.is-loading::after {
+  content: "";
+  position: absolute; top: 50%; left: 50%; width: 16px; height: 16px;
+  margin: -8px 0 0 -8px; border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.5); border-top-color: #fff;
+  animation: spin 0.6s linear infinite;
+}
+.actions button.secondary.is-loading::after, .link-btn.is-loading::after {
+  border: 2px solid rgba(32, 29, 24, 0.25); border-top-color: var(--text-muted);
+}
+
 @media (prefers-reduced-motion: reduce) {
   .contract-card, .menu-row, .stat-tile, .shop-item-card, .hero-circle,
-  .modal-overlay, .modal-card {
+  .modal-overlay, .modal-card, .menu-badge, .star-btn.filled {
     animation: none !important;
   }
-  button, .icon-btn, .fab, .actions button, .btn-primary, .tab-btn {
+  button, .icon-btn, .fab, .actions button, .btn-primary, .tab-btn, .star-btn {
     transition: none !important;
   }
+  .is-loading::after { animation: none !important; }
 }
 
 #app h1 { font-family: var(--font-heading); font-size: 1.3rem; font-weight: 800; text-wrap: balance; margin: 0 0 1.1rem; }
